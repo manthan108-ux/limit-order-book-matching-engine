@@ -96,6 +96,18 @@ public:
     // Returns std::nullopt for an unknown id (including one already cancelled).
     std::optional<Order> cancel(OrderId id);
 
+    // Removes the resting order `id` and returns it with its state UNCHANGED
+    // (cancel() = extract() + mark cancelled). The id is free again afterwards,
+    // so the caller can re-enter an amended version without ever having two
+    // orders with the same id. nullopt for an unknown id.
+    std::optional<Order> extract(OrderId id);
+
+    // Lowers the remaining quantity of resting order `id` in place; it keeps its
+    // queue position (and so its time priority) and its lookup entry. Throws
+    // std::out_of_range for an unknown id, std::invalid_argument unless
+    // 0 < newRemaining < current remaining. Unchanged when it throws.
+    void reduce(OrderId id, Quantity newRemaining);
+
     // Executes `quantity` against the resting order `id` (used by the matching
     // engine). The order keeps its queue position and lookup entry on a partial
     // fill; on a complete fill it is removed from its level, its lookup entry is
@@ -164,6 +176,9 @@ private:
 
     template <typename Map>
     Order removeFrom(Map& side, Lookup::iterator entry);
+
+    template <typename Map>
+    void reduceIn(Map& side, Lookup::iterator entry, Quantity newRemaining);
 
     template <typename Map>
     PriceLevel::FillResult fillIn(Map& side, Lookup::iterator entry, Quantity quantity);

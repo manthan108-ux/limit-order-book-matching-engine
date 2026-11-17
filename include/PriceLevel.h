@@ -74,6 +74,12 @@ public:
     // Order::fill exceptions for a bad quantity (level left unchanged).
     FillResult fill(OrderHandle handle, Quantity quantity);
 
+    // Lowers the remaining quantity of the referenced order in place, keeping
+    // its queue position, and updates the aggregate. Requires
+    // 0 < newRemaining < current remaining (Order::reduceTo exceptions; the
+    // level is unchanged on a throw). Throws std::out_of_range for end().
+    void reduce(OrderHandle handle, Quantity newRemaining);
+
     // Recomputes the aggregate from the orders and compares it to the cached
     // one; also checks every order is active, positive and at this price.
     // O(n); intended for tests and the OrderBook invariant checker.

@@ -6,7 +6,7 @@
 | 2 - Domain models (Order, Trade, PriceLevel) | Complete |
 | 3 - OrderBook state and validation | Complete |
 | 4 - Matching engine and trade generation | Complete |
-| 5 - Order lifecycle (cancel / modify) | Not started |
+| 5 - Order lifecycle management (OrderManager) | Complete |
 | 6 - CLI | Not started |
 | 7 - Testing and reliability | Not started |
 | 8 - Benchmarking | Not started |
@@ -26,35 +26,41 @@ Build system, `OrderTypes.h` (types, enums, transition rules, validation helpers
 
 ## Phase 4
 
-- `MatchingEngine`: price-time-priority matching of incoming limit orders, executing at the resting order's price, with partial and complete fills, one `Trade` per execution, and any remainder rested with its original sequence.
-- `ExecutionReport` (header-only value type): accepted/rejected, reject reason, final status, original/executed/remaining quantity, and the trades generated.
-- Trade ids: a deterministic counter that never wraps. If the id space cannot cover an order's executions, `submit` throws `std::overflow_error` before changing anything.
-- `OrderBook` gained two narrow operations, `bestOrder(side)` and `fill(id, qty)`. `fill` keeps the lookup and levels consistent: a partial fill keeps position and lookup entry, a complete fill erases the entry and any emptied level in the same call.
-- Phase 1-3 source files were not otherwise modified. `OrderBookTests.cpp` gained 5 tests for the new operations and its existing tests are unchanged. The two CMake lists gained the new files.
+`MatchingEngine` (price-time priority, resting-price execution, partial/complete fills, one `Trade` per execution, deterministic non-wrapping trade ids), `ExecutionReport`, and `OrderBook::bestOrder` / `fill`.
 
-Verified from a clean build directory under GCC 16.2 (WinLibs, MinGW-w64, Ninja) with `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror`: zero warnings, `ctest` 6/6 suites pass.
+## Phase 5
+
+- **`OrderManager`**: the lifecycle layer above the engine. It owns the order-id policy (ids unique for the life of the manager, generated or client-supplied, no wrap), one value-based `OrderRecord` per order (state, quantities, prices, sequences, reasons, trade indices), `submit` / `cancel` / `modify`, per-order trade history (`tradesFor`), and `checkConsistency()`.
+- **Modification rules**: price change or quantity increase loses time priority (cancel/replace, may trade if it crosses); quantity decrease keeps priority (in place); no change is rejected as `NoChange`. Quantity means *remaining* quantity, and cumulative executed quantity is never altered.
+- **Trade history**: the engine owns the global list; records are updated only by a cursor-based `syncTrades()`, so each trade is applied exactly once to its buyer and seller.
+- **Lower-layer additions** (all additive): `Order::reduceTo` / `replaced`, `PriceLevel::reduce`, `OrderBook::extract` / `reduce` (`cancel` is now `extract` plus marking CANCELLED), `MatchingEngine::cancel` / `reduce` / `replace`, `ExecutionReport::cancelReason`, and the `OrderTypes.h` enum values `RejectReason::{InvalidSide, IdSpaceExhausted, TradeIdsExhausted}` and `CancelReason`.
+- Phase 1-4 source files changed only by the additions above. No existing test was changed or removed; tests were appended to `OrderTypesTests`, `OrderTests`, `PriceLevelTests` and `OrderBookTests`.
+
+Verified from a clean build directory under GCC 16.2 (WinLibs, MinGW-w64, Ninja) with `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror`: zero warnings, `ctest` 7/7 suites pass.
 
 | Suite | Tests |
 |---|---|
-| OrderTypesTests (Phase 1) | 8 |
-| OrderTests | 13 |
+| OrderTypesTests | 9 (8 existing + 1 new) |
+| OrderTests | 18 (13 existing + 5 new) |
 | TradeTests | 8 |
-| PriceLevelTests | 18 |
-| OrderBookTests | 43 (38 existing + 5 new) |
+| PriceLevelTests | 21 (18 existing + 3 new) |
+| OrderBookTests | 48 (43 existing + 5 new) |
 | MatchingEngineTests | 34 |
-| **Total** | **124** |
+| OrderManagerTests | 41 |
+| **Total** | **179** (124 existing + 55 new) |
 
-MatchingEngineTests covers all 10 specified scenarios plus the edge cases (the trade-id overflow boundary, rejections that leave the book unchanged, large values, repeated partial fills, FIFO of rested remainders). Two 3000-order stress runs and a deep-book sweep compare every trade, every report and the final book against an independent naive reference model, with invariants checked after every operation. I also confirmed the tests catch bugs: scratch copies of the engine that execute at the incoming price, swap maker and taker, flip the taker side, ignore the limit price, or never rest the remainder each fail the suite. Those mutants are not committed.
+OrderManagerTests covers id policy (including generator overflow and the rejected-id policy), submission, cancellation (including after a partial fill), modification (price, quantity up/down, no change, invalid values, crossing, executed-quantity semantics, FIFO reset/preservation, trade-id exhaustion leaving the order untouched), per-order trade history, and three 3000-step lifecycle stress runs. The stress runs compare every report, every record and every order's trade list against an independent naive model, and run `checkConsistency()` after every operation. I also confirmed the tests catch bugs: scratch copies of the manager that allow id reuse, let a quantity decrease lose priority, forget the cancelled quantity, apply trades to only one side, accept no-change modifications, wrap the id generator, or skip the effective-quantity update each fail the suite. Those mutants are not committed.
 
 ## Known limitations
 
 - Only GCC has been tried. MSVC and Clang are not yet verified.
-- The engine only matches *incoming* orders. If resting orders already cross each other (possible only by adding to an `OrderBook` directly), an order that does not reach the cross leaves it in place. A test documents this.
-- Execution timestamps are the taker's `sequence` (deterministic, no clock). There is no wall-clock time.
-- If an allocation fails part-way through a match, the book stays valid but the incoming order is not rested (basic, not strong, guarantee). Validation rejections and trade-id exhaustion are strong.
-- Id reuse: only resting ids are tracked. A filled or cancelled id can be submitted again. Rejecting that, if wanted, belongs to the Phase 5 order manager.
-- No cancel or modify at the engine level yet (`OrderBook::cancel` exists). Both belong to Phase 5.
-- Cancel and execution costs are O(log P) + average O(1) per order touched, not O(1), because the level is found by price in the map.
-- The invariant checker's failure paths were exercised with an uncommitted scratch program. There is no committed negative test, because a corrupt book cannot be built through the public API.
-- The CLI is still a placeholder.
+- **Allocation failure mid-operation is only a basic guarantee** (details in ARCHITECTURE.md). The `SystemFailure` recovery path exists but is **not tested**, because there is no allocation-failure injection.
+- History is never pruned: one `OrderRecord` per id ever used, plus all trades, grow without bound.
+- `OrderManager::order()` returns a copy of the record, including its trade-index vector.
+- A no-change `modify` is rejected (`NoChange`) rather than accepted as a no-op.
+- Modifying to zero quantity is rejected; use `cancel`.
+- Execution timestamps are the taker's `sequence` (deterministic, no wall clock).
+- Orders are limit orders only; the engine matches only incoming orders (a cross between resting orders added directly to an `OrderBook` is not uncrossed).
+- Cancel and execution costs are O(log P) + average O(1) per order, not O(1), because the level is found by price in the map.
+- The CLI is still a placeholder (Phase 6).
 - `benchmarks/` is empty. No benchmark numbers exist yet, and no performance claim is made.

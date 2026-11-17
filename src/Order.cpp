@@ -1,5 +1,6 @@
 #include "Order.h"
 
+#include <limits>
 #include <stdexcept>
 
 namespace lob {
@@ -48,6 +49,33 @@ void Order::fill(Quantity quantity) {
     const bool completes = quantity == remainingQuantity_;
     transitionTo(completes ? OrderStatus::Filled : OrderStatus::PartiallyFilled);
     remainingQuantity_ -= quantity;
+}
+
+void Order::reduceTo(Quantity newRemaining) {
+    if (!isActive()) {
+        throw std::logic_error("cannot amend order in state " + toString(status_));
+    }
+    if (newRemaining <= 0 || newRemaining >= remainingQuantity_) {
+        throw std::invalid_argument("reduceTo requires 0 < newRemaining < remainingQuantity");
+    }
+    originalQuantity_ -= remainingQuantity_ - newRemaining;  // executed stays the same
+    remainingQuantity_ = newRemaining;
+}
+
+Order Order::replaced(Price newPrice, Quantity newRemaining, Sequence newSequence) const {
+    if (!isActive()) {
+        throw std::logic_error("cannot amend order in state " + toString(status_));
+    }
+    if (!isValidPrice(newPrice) || !isValidQuantity(newRemaining) ||
+        newRemaining > std::numeric_limits<Quantity>::max() - executedQuantity()) {
+        throw std::invalid_argument("invalid replacement price or quantity");
+    }
+    Order copy = *this;
+    copy.price_ = newPrice;
+    copy.sequence_ = newSequence;
+    copy.remainingQuantity_ = newRemaining;
+    copy.originalQuantity_ = executedQuantity() + newRemaining;
+    return copy;
 }
 
 void Order::cancel() { transitionTo(OrderStatus::Cancelled); }

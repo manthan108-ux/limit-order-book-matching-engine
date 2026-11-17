@@ -654,4 +654,69 @@ TEST(BookDeterministicStressMatchesReferenceModel) {
     CHECK(consistent(book));
 }
 
+
+// ---- extract() and reduce() (Phase 5) ------------------------------------
+
+TEST(BookExtractReturnsOrderUnchangedAndFreesTheId) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    book.add(buy(2, 100, 10));
+    book.fill(1, 4);
+    auto o = book.extract(1);
+    CHECK(o.has_value());
+    CHECK_EQ(o->remainingQuantity(), 6);
+    CHECK(o->status() == OrderStatus::PartiallyFilled);  // not cancelled
+    CHECK(!book.contains(1));
+    CHECK((idsAt(book.bids().at(100)) == std::vector<OrderId>{2}));
+    CHECK_EQ(book.bestBid()->totalQuantity, 10);
+    CHECK(consistent(book));
+    CHECK(!book.extract(1).has_value());  // gone
+    // Re-entering with a fresh sequence (as the engine does) is allowed: the id is free.
+    CHECK(book.add(o->replaced(100, o->remainingQuantity(), ++g_seq)) == RejectReason::None);
+    CHECK((idsAt(book.bids().at(100)) == std::vector<OrderId>{2, 1}));  // at the back
+    CHECK(consistent(book));
+}
+
+TEST(BookExtractErasesEmptyLevel) {
+    OrderBook book;
+    book.add(sell(1, 100, 10));
+    book.extract(1);
+    CHECK(book.empty());
+    CHECK_EQ(book.askLevelCount(), 0u);
+    CHECK(consistent(book));
+}
+
+TEST(BookReduceKeepsPositionAndAggregate) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    book.add(buy(2, 100, 20));
+    book.add(buy(3, 100, 30));
+    book.reduce(2, 5);
+    CHECK((idsAt(book.bids().at(100)) == std::vector<OrderId>{1, 2, 3}));
+    CHECK_EQ(book.find(2)->remainingQuantity(), 5);
+    CHECK_EQ(book.bestBid()->totalQuantity, 45);
+    CHECK(book.contains(2));
+    CHECK(consistent(book));
+}
+
+TEST(BookReduceRejectsBadInputWithoutChange) {
+    OrderBook book;
+    book.add(sell(1, 100, 10));
+    CHECK_THROWS(book.reduce(99, 1), std::out_of_range);
+    CHECK_THROWS(book.reduce(1, 0), std::invalid_argument);
+    CHECK_THROWS(book.reduce(1, 10), std::invalid_argument);
+    CHECK_THROWS(book.reduce(1, 20), std::invalid_argument);
+    CHECK_EQ(book.find(1)->remainingQuantity(), 10);
+    CHECK_EQ(book.bestAsk()->totalQuantity, 10);
+    CHECK(consistent(book));
+}
+
+TEST(BookCancelStillMarksOrderCancelledAfterRefactor) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    auto o = book.cancel(1);
+    CHECK(o->status() == OrderStatus::Cancelled);
+    CHECK(!book.cancel(1).has_value());
+}
+
 TEST_MAIN()

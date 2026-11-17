@@ -20,13 +20,20 @@ namespace lob {
 // "Accepted with zero trades" is therefore distinguishable from "rejected".
 //
 // `remainingQuantity` is the quantity still working in the book after the
-// operation (0 for FILLED and REJECTED orders). The final state is carried by
-// `status` alone; there is no second, redundant state flag.
+// operation (0 for FILLED, CANCELLED and REJECTED orders). The final state is
+// carried by `status` alone; there is no second, redundant state flag.
+//
+// The same type reports CANCEL and MODIFY (see `operation`). For those, and
+// for a failed operation on a known order, `status` is the order's current
+// status and `originalQuantity` its effective total (executed + remaining, or
+// + cancelled quantity once cancelled); for an unknown order `status` is only
+// the placeholder REJECTED.
 struct ExecutionReport {
     Operation operation = Operation::Add;
     OrderId orderId = 0;
     bool accepted = false;
     RejectReason rejectReason = RejectReason::None;
+    CancelReason cancelReason = CancelReason::None;  // set on a successful cancel
     OrderStatus status = OrderStatus::Rejected;
     Quantity originalQuantity = 0;
     Quantity executedQuantity = 0;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include "ExecutionReport.h"
@@ -60,6 +61,30 @@ public:
     ExecutionReport submit(OrderId id, Side side, Price price, Quantity quantity,
                            Sequence sequence);
 
+    // ---- Order maintenance (used by the OrderManager) ----------------------
+
+    // Removes a resting order and returns it marked CANCELLED; nullopt if unknown.
+    std::optional<Order> cancel(OrderId id) { return book_.cancel(id); }
+
+    // Lowers a resting order's remaining quantity in place; it keeps its time
+    // priority. Throws like OrderBook::reduce. Never trades.
+    void reduce(OrderId id, Quantity newRemaining) { book_.reduce(id, newRemaining); }
+
+    // Cancel/replace for changes that lose time priority (a new price, or a
+    // larger remaining quantity). The resting order `id` is replaced by a copy
+    // with `newPrice`, `newRemaining` and `newSequence`, keeping its id and
+    // cumulative executed quantity, and re-enters through normal matching: if the
+    // new price crosses the book it trades (at resting prices) before any
+    // remainder rests at the back of its new queue. The order is out of the book
+    // only inside this call, so two orders with one id never coexist.
+    // Returns a report with operation MODIFY. Rejected (book unchanged):
+    //   OrderNotFound; InvalidPrice / InvalidQuantity (incl. overflow of
+    //   executed + newRemaining). Throws std::overflow_error, with the book
+    //   unchanged, if trade ids cannot cover the executions. Strong guarantee for
+    //   all of these; see the class comment for allocation failure.
+    ExecutionReport replace(OrderId id, Price newPrice, Quantity newRemaining,
+                            Sequence newSequence);
+
     const OrderBook& book() const noexcept { return book_; }
     // Every trade executed so far, in execution order.
     const std::vector<Trade>& trades() const noexcept { return trades_; }
@@ -71,6 +96,11 @@ public:
 
 private:
     TradeId allocateTradeId();
+    // Throws std::overflow_error, changing nothing, if `incoming` could not be
+    // numbered in full.
+    void ensureTradeIds(const Order& incoming) const;
+    // Match + rest `incoming`, which must not be in the book.
+    ExecutionReport execute(Order incoming, Operation operation);
 
     OrderBook book_;
     std::vector<Trade> trades_;

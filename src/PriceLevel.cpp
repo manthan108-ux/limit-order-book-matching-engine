@@ -62,6 +62,16 @@ PriceLevel::FillResult PriceLevel::fill(OrderHandle handle, Quantity quantity) {
     return FillResult::PartiallyFilled;
 }
 
+void PriceLevel::reduce(OrderHandle handle, Quantity newRemaining) {
+    if (handle == orders_.cend()) {
+        throw std::out_of_range("reduce() with end() handle");
+    }
+    Queue::iterator it = orders_.erase(handle, handle);  // const -> mutable, no-op erase
+    const Quantity before = it->remainingQuantity();
+    it->reduceTo(newRemaining);  // validates first; throws without changing the order
+    totalQuantity_ -= before - newRemaining;
+}
+
 bool PriceLevel::checkInvariants() const noexcept {
     Quantity sum = 0;
     for (const Order& o : orders_) {

@@ -257,4 +257,42 @@ TEST(PriceLevelAggregateNeverNegativeThroughChurn) {
     CHECK_EQ(level.totalQuantity(), 0);
 }
 
+
+// ---- reduce() (Phase 5) ------------------------------------------------------
+
+TEST(PriceLevelReduceKeepsPositionAndUpdatesAggregate) {
+    PriceLevel level(kPrice);
+    level.add(makeOrder(1, 10));
+    auto mid = level.add(makeOrder(2, 20));
+    level.add(makeOrder(3, 30));
+    level.reduce(mid, 5);
+    CHECK((ids(level) == std::vector<OrderId>{1, 2, 3}));
+    CHECK_EQ(mid->remainingQuantity(), 5);
+    CHECK_EQ(level.totalQuantity(), 45);
+    CHECK(level.checkInvariants());
+}
+
+TEST(PriceLevelReduceRejectsBadInputWithoutChange) {
+    PriceLevel level(kPrice);
+    auto h = level.add(makeOrder(1, 10));
+    CHECK_THROWS(level.reduce(h, 0), std::invalid_argument);
+    CHECK_THROWS(level.reduce(h, 10), std::invalid_argument);
+    CHECK_THROWS(level.reduce(h, 11), std::invalid_argument);
+    CHECK_THROWS(level.reduce(level.end(), 1), std::out_of_range);
+    CHECK_EQ(level.totalQuantity(), 10);
+    CHECK_EQ(level.front().remainingQuantity(), 10);
+    CHECK(level.checkInvariants());
+}
+
+TEST(PriceLevelReduceAfterPartialFill) {
+    PriceLevel level(kPrice);
+    auto h = level.add(makeOrder(1, 10));
+    level.fill(h, 4);       // remaining 6
+    level.reduce(h, 2);
+    CHECK_EQ(level.totalQuantity(), 2);
+    CHECK_EQ(level.front().executedQuantity(), 4);
+    CHECK_EQ(level.front().originalQuantity(), 6);
+    CHECK(level.checkInvariants());
+}
+
 TEST_MAIN()

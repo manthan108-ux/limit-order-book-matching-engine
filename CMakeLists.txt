@@ -35,6 +35,7 @@ add_library(lob_core STATIC
   src/PriceLevel.cpp
   src/OrderBook.cpp
   src/MatchingEngine.cpp
+  src/OrderManager.cpp
 )
 target_include_directories(lob_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(lob_core PUBLIC cxx_std_17)

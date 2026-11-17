@@ -57,6 +57,24 @@ public:
     // Status becomes PARTIALLY_FILLED, or FILLED when nothing remains.
     void fill(Quantity quantity);
 
+    // ---- Amendments (used by order modification) --------------------------
+    // Amending never touches the cumulative executed quantity. The "original"
+    // quantity of an amended order is therefore its effective total:
+    //   originalQuantity == executedQuantity + remainingQuantity   (always)
+
+    // Lowers the remaining quantity in place (the order keeps its identity,
+    // price and sequence). Requires 0 < newRemaining < remainingQuantity;
+    // throws std::logic_error if inactive, std::invalid_argument otherwise.
+    // Nothing changes when it throws.
+    void reduceTo(Quantity newRemaining);
+
+    // A copy of this order with a new price, remaining quantity and sequence
+    // (time priority); id, side, type, status and executed quantity carry over.
+    // Used for changes that lose priority. This order is not modified.
+    // Throws std::logic_error if inactive; std::invalid_argument if the price or
+    // quantity is invalid or executed + newRemaining would overflow.
+    Order replaced(Price newPrice, Quantity newRemaining, Sequence newSequence) const;
+
     // NEW / PARTIALLY_FILLED -> CANCELLED. Throws std::logic_error otherwise.
     void cancel();
 

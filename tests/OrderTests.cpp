@@ -159,4 +159,76 @@ TEST(OrderQuantityInvariantAcrossFills) {
     CHECK_EQ(o.executedQuantity(), 100);
 }
 
+
+// ---- Amendments (Phase 5) ----------------------------------------------------
+
+TEST(OrderReduceToKeepsExecutedAndAdjustsOriginal) {
+    Order o = makeOrder(100);
+    o.fill(40);
+    o.reduceTo(30);  // remaining 60 -> 30
+    CHECK_EQ(o.remainingQuantity(), 30);
+    CHECK_EQ(o.executedQuantity(), 40);
+    CHECK_EQ(o.originalQuantity(), 70);  // executed + remaining
+    CHECK(o.status() == OrderStatus::PartiallyFilled);
+    CHECK_EQ(o.sequence(), 7u);          // identity and priority untouched
+    CHECK_EQ(o.price(), 100);
+}
+
+TEST(OrderReduceToOnUntouchedOrderStaysNew) {
+    Order o = makeOrder(10);
+    o.reduceTo(1);
+    CHECK_EQ(o.remainingQuantity(), 1);
+    CHECK_EQ(o.originalQuantity(), 1);
+    CHECK(o.status() == OrderStatus::New);
+}
+
+TEST(OrderReduceToRejectsBadValuesWithoutChange) {
+    Order o = makeOrder(10);
+    CHECK_THROWS(o.reduceTo(0), std::invalid_argument);
+    CHECK_THROWS(o.reduceTo(-1), std::invalid_argument);
+    CHECK_THROWS(o.reduceTo(10), std::invalid_argument);  // not a reduction
+    CHECK_THROWS(o.reduceTo(11), std::invalid_argument);
+    CHECK_EQ(o.remainingQuantity(), 10);
+    CHECK_EQ(o.originalQuantity(), 10);
+    Order done = makeOrder(5);
+    done.fill(5);
+    CHECK_THROWS(done.reduceTo(1), std::logic_error);
+    Order c = makeOrder(5);
+    c.cancel();
+    CHECK_THROWS(c.reduceTo(1), std::logic_error);
+}
+
+TEST(OrderReplacedCarriesIdentityAndExecutedQuantity) {
+    Order o = makeOrder(100);
+    o.fill(40);
+    Order r = o.replaced(105, 80, 99);
+    CHECK_EQ(r.id(), o.id());
+    CHECK(r.side() == o.side());
+    CHECK_EQ(r.price(), 105);
+    CHECK_EQ(r.sequence(), 99u);
+    CHECK_EQ(r.remainingQuantity(), 80);
+    CHECK_EQ(r.executedQuantity(), 40);
+    CHECK_EQ(r.originalQuantity(), 120);
+    CHECK(r.status() == OrderStatus::PartiallyFilled);
+    // The source order is untouched.
+    CHECK_EQ(o.price(), 100);
+    CHECK_EQ(o.remainingQuantity(), 60);
+    CHECK_EQ(o.sequence(), 7u);
+}
+
+TEST(OrderReplacedRejectsBadValues) {
+    Order o = makeOrder(10);
+    CHECK_THROWS(o.replaced(0, 5, 1), std::invalid_argument);
+    CHECK_THROWS(o.replaced(-3, 5, 1), std::invalid_argument);
+    CHECK_THROWS(o.replaced(100, 0, 1), std::invalid_argument);
+    CHECK_THROWS(o.replaced(100, -1, 1), std::invalid_argument);
+    Order partly = makeOrder(10);
+    partly.fill(4);
+    CHECK_THROWS(partly.replaced(100, std::numeric_limits<Quantity>::max(), 1),
+                 std::invalid_argument);  // executed + remaining would overflow
+    Order c = makeOrder(10);
+    c.cancel();
+    CHECK_THROWS(c.replaced(100, 5, 1), std::logic_error);
+}
+
 TEST_MAIN()

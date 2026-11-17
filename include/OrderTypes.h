@@ -42,7 +42,17 @@ enum class RejectReason : std::uint8_t {
     InvalidQuantity,
     OrderNotFound,
     OrderNotActive,   // already filled / cancelled / rejected
-    NoChange          // modify request changes nothing
+    NoChange,         // modify request changes nothing
+    InvalidSide,      // side is not BUY or SELL
+    IdSpaceExhausted, // no order id / sequence number left to assign
+    TradeIdsExhausted // the engine cannot number the trades this order would need
+};
+
+// Why an order left the book as CANCELLED.
+enum class CancelReason : std::uint8_t {
+    None,
+    UserRequested,
+    SystemFailure  // the order was lost to an internal failure (e.g. out of memory)
 };
 
 // ---- Helpers --------------------------------------------------------------
@@ -105,6 +115,15 @@ inline std::string toString(Operation o) {
     return "UNKNOWN";
 }
 
+inline std::string toString(CancelReason r) {
+    switch (r) {
+        case CancelReason::None:          return "none";
+        case CancelReason::UserRequested: return "cancelled by request";
+        case CancelReason::SystemFailure: return "removed after an internal failure";
+    }
+    return "unknown";
+}
+
 inline std::string toString(RejectReason r) {
     switch (r) {
         case RejectReason::None:             return "none";
@@ -115,6 +134,9 @@ inline std::string toString(RejectReason r) {
         case RejectReason::OrderNotFound:    return "order not found";
         case RejectReason::OrderNotActive:   return "order is not active";
         case RejectReason::NoChange:         return "modification changes nothing";
+        case RejectReason::InvalidSide:      return "invalid side (must be BUY or SELL)";
+        case RejectReason::IdSpaceExhausted: return "identifier space exhausted";
+        case RejectReason::TradeIdsExhausted: return "trade id space exhausted";
     }
     return "unknown";
 }

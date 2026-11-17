@@ -1,13 +1,13 @@
 # Architecture
 
-> Status: Phases 1-4 implemented. Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
+> Status: Phases 1-5 implemented. Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
 
 ## Layering
 
 ```
 CLI (src/main.cpp)            parsing + printing only, no business logic   (Phase 6)
         |
-OrderManager                  validate, add / cancel / modify, reports     (Phase 5)
+OrderManager                  id policy, lifecycle history, cancel / modify (Phase 5, done)
         |
 MatchingEngine                price-time matching, trade generation        (Phase 4, done)
         |
@@ -101,7 +101,7 @@ flowchart LR
 - `checkInvariants()` compares handles for equality and never dereferences one it has not validated.
 
 ### Policies
-- **Id reuse:** ids are unique among *resting* orders. Once an order is cancelled its id can be added again (a test covers this). Remembering retired ids is for the order manager (Phase 5).
+- **Id reuse:** ids are unique among *resting* orders. Once an order is cancelled its id can be added again (a test covers this). The OrderManager (Phase 5) remembers retired ids; the book does not.
 - **Sequence:** callers submit non-decreasing `sequence` values in arrival order. FIFO position is insertion order, and the invariant checker verifies it agrees with `sequence`. The book does not itself reject out-of-order sequences.
 - **Rejections from `add`:** `DuplicateOrderId`, `OrderNotActive`, `InvalidQuantity` (no remaining quantity). Price, id and quantity validity is already guaranteed by `Order::create`. A rejected add leaves the book unchanged.
 - **`cancel(id)`:** returns the removed order marked CANCELLED, or `std::nullopt` for an unknown id. That includes a repeated cancel, because the entry is gone.
@@ -215,6 +215,116 @@ An order that does not trade costs only the O(1) best-price check plus `add`. Th
 ### Exception safety
 Rejections and the id-exhaustion check happen before any change. If an allocation fails part-way through a match (`bad_alloc`), every execution already applied is complete and recorded and the book still satisfies its invariants, but the incoming order is not rested (basic guarantee). Each execution records the trade before mutating, and the permanent history is pushed last.
 
+## Order lifecycle manager (implemented, Phase 5: `include/OrderManager.h`, `src/OrderManager.cpp`)
+
+```mermaid
+flowchart TD
+    CLI["CLI (Phase 6)"] --> OM
+    subgraph OM["OrderManager"]
+        ID["id + sequence policy<br/>records_: id -> OrderRecord (value history)"]
+        SY["syncTrades()<br/>cursor over engine trade list"]
+    end
+    OM --> ME["MatchingEngine<br/>submit / replace / cancel / reduce"]
+    ME --> OB["OrderBook<br/>bestOrder / fill / add / extract / reduce / cancel"]
+    OB --> PL["PriceLevel (FIFO list)"]
+    ME -- "trades_ (global history)" --> SY
+    SY -- "applies each trade once to buyer + seller records" --> ID
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> NEW: submit accepted
+    [*] --> REJECTED: submit rejected (id usable, retired)
+    NEW --> PARTIALLY_FILLED: partial execution
+    NEW --> FILLED: full execution
+    NEW --> CANCELLED: cancel
+    PARTIALLY_FILLED --> PARTIALLY_FILLED: more executions / modify
+    PARTIALLY_FILLED --> FILLED: full execution
+    PARTIALLY_FILLED --> CANCELLED: cancel
+    NEW --> NEW: modify
+    FILLED --> [*]
+    CANCELLED --> [*]
+    REJECTED --> [*]
+```
+
+### Responsibilities
+- **OrderManager** owns id policy, one `OrderRecord` per order ever recorded, the trade-to-order associations, and the operations `submit`, `cancel` and `modify`. It owns a `MatchingEngine` and never touches the book's containers: it reads the book through `book()` and mutates it only through the engine's public operations. It has no I/O and no parsing.
+- **MatchingEngine** gained three narrow operations: `cancel(id)`, `reduce(id, qty)` and `replace(id, price, qty, sequence)`. `replace` is cancel/replace as one atomic engine step (see Modification).
+- **OrderBook** gained `extract(id)` (remove without changing state; `cancel` is now `extract` plus marking CANCELLED) and `reduce(id, qty)`. **PriceLevel** gained `reduce(handle, qty)`. **Order** gained `reduceTo(qty)` and `replaced(price, qty, sequence)`.
+- **ExecutionReport** is the single result type for submit, cancel and modify (`operation` says which), so there is no parallel result hierarchy. It gained `cancelReason`. `OrderRecord` is the lifecycle snapshot value type.
+
+### Order id policy
+- Ids are unique **for the life of the manager**. Every id ever recorded stays in `records_` whether the order was filled, cancelled or rejected. The book's resting-id set is deliberately not the source of truth.
+- Ids are client-supplied (`submit(id, ...)`) or generated (`submit(...)`). The generator is a counter starting at `firstGeneratedId` (default 1) that skips ids clients have used and never wraps: after `UINT64_MAX` is issued, generated submissions are rejected with `IdSpaceExhausted`.
+- **Rejected submissions.** A submission with a *usable* id (non-zero, unused) is recorded as REJECTED even if its price or quantity was invalid, and that id is retired: it cannot be resubmitted, cancelled or modified. This keeps an audit trail and means a rejected id can never later be confused with a live order. A submission with *no* usable id is rejected without a record: id 0 (`InvalidOrderId`), an id already used (`DuplicateOrderId`; the existing order is untouched), an invalid side (`InvalidSide`, checked first so that no id is burned), or an exhausted generator.
+- The manager also assigns the time-priority `sequence` from one increasing counter (one per accepted submission and per modification that loses priority). It likewise never wraps.
+
+### Lifecycle records
+An `OrderRecord` is a plain value (no pointer into the book), so it stays valid however the order leaves it. It holds the side, original and current price, submission and current sequence, status, reject and cancel reasons, and the quantities below. `order(id)` returns a copy.
+
+| Quantity | Meaning |
+|---|---|
+| `submittedQuantity` | what the client asked for; never changes |
+| `effectiveQuantity` | executed + still working (+ cancelled once cancelled); equals the submitted quantity until a modification |
+| `executedQuantity` | cumulative; only grows; no modification touches it |
+| `remainingQuantity` | still working in the book; 0 once filled, cancelled or rejected |
+| `cancelledQuantity` | what was working when the order was cancelled |
+
+Always `executed + remaining + cancelled == effective`. The in-book `Order::originalQuantity` is kept equal to `effectiveQuantity`.
+
+### Submission workflow
+1. Check side, then id (client id: non-zero and unused; generated: allocate), then price/quantity via `Order::validate`, then allocate a sequence. A failure here is a rejection (recorded or not, per the policy above).
+2. Insert the record **before** the order can reach the book, so a resting order never lacks a record.
+3. `engine.submit`. If the engine reports that trade ids cannot cover the order (`std::overflow_error`, raised before anything changed), the record becomes REJECTED / `TradeIdsExhausted`.
+4. `syncTrades()` applies the resulting trades to the buyer and seller records. The returned report is built from the record, plus the trades.
+
+### Cancellation workflow
+Only ACTIVE orders can be cancelled. Unknown id gives `OrderNotFound`. Filled, already-cancelled and rejected orders give `OrderNotActive` (the report still shows the order's real status and quantities). Otherwise `engine.cancel(id)` removes it from the book and the record becomes CANCELLED with `cancelledQuantity` = what was left, `remainingQuantity` 0, and reason `UserRequested`. Executed quantity and trade history are untouched. The record update is plain assignment after the engine call, so the operation is strong.
+
+### Modification workflow and priority
+`modify(id, newPrice?, newRemainingQuantity?)`: the quantity is the new *remaining* quantity, and the cumulative executed quantity is never altered, so the effective total is executed + new remaining.
+
+| Request | Behaviour |
+|---|---|
+| nothing, or values equal to the current ones | rejected `NoChange`; the order and its priority are untouched |
+| price unchanged, remaining decreased | in place (`reduce`); **keeps time priority** |
+| price unchanged, remaining increased | **loses priority**: cancel/replace, back of its queue |
+| price changed (any quantity) | **loses priority**: cancel/replace, back of the queue at the new price |
+| price <= 0, or remaining <= 0 | `InvalidPrice` / `InvalidQuantity` (use cancel to remove an order) |
+| unknown / filled / cancelled / rejected order | `OrderNotFound` / `OrderNotActive` |
+
+Worked example: BUY 100 @ 100 has executed 40, remaining 60. Modifying remaining to 30 gives executed 40, remaining 30, effective 70, and it keeps its place. Modifying remaining to 80 gives executed 40, remaining 80, effective 120, and it moves to the back of its price level.
+
+**Cancel/replace** (`MatchingEngine::replace`): while the order still rests, everything that can fail logically is checked (existence, values, quantity overflow, trade-id capacity). Then the order is extracted and its replacement (same id and executed quantity, new price/quantity/sequence) goes through normal matching, so a new price that crosses the book trades at resting prices before any remainder rests at the back of the new queue. The order is outside the book only inside this call, so two orders with one id never coexist. After a successful replace, the record's price, sequence, remaining and effective quantity are updated and the replacement's trades are applied.
+
+### Trade history
+The engine owns the single global trade list (`trades()`). Each `OrderRecord` stores the **indices** of its trades (buyer or seller), strictly increasing, which is execution order. `tradesFor(id)` returns copies of those trades. The records are updated only by `syncTrades()`, which walks the engine's list from a persistent cursor and applies each trade to its buyer's and seller's record exactly once (reserving capacity first, so a trade is applied completely or not at all). That makes "each trade recorded exactly once" structural, and lets an interrupted operation resume on the next call. Trades survive cancellation and full execution, since the history is never erased.
+
+### Exception safety
+- **Strong (nothing changed):** every rejection; trade-id exhaustion (a rejected submit, or a failed modify with the order untouched and still in place); cancel; in-place reduction; a failed record insertion.
+- **Basic only: allocation failure (`std::bad_alloc`) in the middle of a submit or replace.** Executions already done stay done and are recorded, and the book stays valid, but the order may no longer be resting. Before rethrowing, the manager applies those executions and marks such an order CANCELLED with `CancelReason::SystemFailure` (or FILLED if its executions completed it), so a record is never "active" without a book entry. This recovery path is **not exercised by the tests**, since the tests cannot inject allocation failures. I am not claiming a strong guarantee for it.
+- If the manager's `syncTrades` itself throws (allocation) after an operation succeeded in the engine, the records catch up at the start of the next call, but queries made before then can be stale.
+
+### Verification aid
+`checkConsistency()` (O(records + trades)) runs the book's invariants and checks every record against the book (active records rest with identical side/price/quantities/sequence; terminal records are absent), status/quantity coherence, that each record's trades involve it, are increasing and sum to its executed quantity, and that every trade is recorded exactly once on its buyer and once on its seller.
+
+### Complexity (N = records, T = trades, P = price levels on the order's side, k = executions, t_o = trades of one order)
+
+| Operation | Time | Notes |
+|---|---|---|
+| id validation / duplicate check | average O(1) | hash lookup in `records_` |
+| generated id allocation | average O(1) amortized | skips client ids; the loop is bounded by the number of client ids used |
+| record / lifecycle lookup `order(id)` | average O(1) + O(t_o) | O(t_o) only to copy the index vector |
+| submit | O(log P) + average O(1) + k executions | the engine's cost (O(k log P)); plus O(k) to apply trades |
+| cancel | O(log P) + average O(1) | hash lookups + queue removal by handle + level lookup/erase |
+| modify, in place | O(log P) + average O(1) | `reduce` |
+| modify, cancel/replace | O(log P) + average O(1) + k executions | extract + re-enter; plus an O(k) dry run only when trade ids are scarce |
+| `tradesFor(id)` | O(t_o) | copies t_o trades by index |
+| historical storage | O(N + T) space | one record per id ever used plus each trade's index in two records; **no pruning**, so memory grows without bound |
+| `checkConsistency` | O(N + T) average | test/debug use |
+
+Hash operations are *average* O(1) (O(N) worst case on a pathological hash). Ordered-map steps are O(log P). None of this is a latency measurement: Phase 8 will measure, and no performance claim is made here.
+
 ## Data structure summary
 
 | Structure | Purpose | Why |
@@ -233,7 +343,7 @@ The specification lists both. A deque gives better cache locality but cannot del
 ### Priority rules
 - Price priority first, then arrival sequence. *(Phase 4, implemented)*
 - Trades execute at the resting order's price. *(Phase 4, implemented)*
-- Modify *(to be implemented, Phase 5)*: a price change cancels and re-enters the order with a new sequence (loses priority). A quantity increase also loses priority. A quantity decrease keeps priority and the order stays in place. Modifying a terminal order is rejected.
+- Modify *(Phase 5, implemented, see the OrderManager section)*: a price change or a quantity increase loses priority, a quantity decrease keeps it, and modifying a terminal order is rejected.
 
 ## Testing approach
 

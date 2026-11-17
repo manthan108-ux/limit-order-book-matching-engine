@@ -76,4 +76,14 @@ TEST(RejectReasonMessages) {
     CHECK(!toString(RejectReason::OrderNotFound).empty());
 }
 
+
+TEST(NewReasonsHaveMessages) {
+    CHECK(!toString(RejectReason::InvalidSide).empty());
+    CHECK(!toString(RejectReason::IdSpaceExhausted).empty());
+    CHECK(!toString(RejectReason::TradeIdsExhausted).empty());
+    CHECK_EQ(toString(CancelReason::None), "none");
+    CHECK(!toString(CancelReason::UserRequested).empty());
+    CHECK(!toString(CancelReason::SystemFailure).empty());
+}
+
 TEST_MAIN()

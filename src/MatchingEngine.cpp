@@ -33,9 +33,10 @@ std::uint64_t countExecutions(const Map& opposite, const Order& incoming) {
     return executions;
 }
 
-ExecutionReport rejection(OrderId id, Quantity originalQuantity, RejectReason reason) {
+ExecutionReport rejection(Operation operation, OrderId id, Quantity originalQuantity,
+                          RejectReason reason) {
     ExecutionReport r;
-    r.operation = Operation::Add;
+    r.operation = operation;
     r.orderId = id;
     r.accepted = false;
     r.rejectReason = reason;
@@ -75,37 +76,71 @@ TradeId MatchingEngine::allocateTradeId() {
 ExecutionReport MatchingEngine::submit(OrderId id, Side side, Price price,
                                        Quantity quantity, Sequence sequence) {
     const RejectReason invalid = Order::validate(id, price, quantity);
-    if (invalid != RejectReason::None) return rejection(id, quantity, invalid);
+    if (invalid != RejectReason::None) {
+        return rejection(Operation::Add, id, quantity, invalid);
+    }
     return submit(*Order::create(id, side, OrderType::Limit, price, quantity, sequence));
 }
 
-ExecutionReport MatchingEngine::submit(Order incoming) {
-    const OrderId id = incoming.id();
-    const Quantity original = incoming.originalQuantity();
-
-    if (book_.contains(id)) return rejection(id, original, RejectReason::DuplicateOrderId);
-    if (!incoming.isActive()) return rejection(id, original, RejectReason::OrderNotActive);
-    if (incoming.remainingQuantity() <= 0) {
-        return rejection(id, original, RejectReason::InvalidQuantity);
-    }
-
-    const Side side = incoming.side();
-    const Side opposite = lob::opposite(side);
-
-    // Fail before any mutation if the executions could not all get a trade id.
+void MatchingEngine::ensureTradeIds(const Order& incoming) const {
     // Fast path: enough ids for even one trade per resting order. Otherwise
     // count exactly, since ids this scarce are an extreme corner case.
     if (tradeIdsRemaining() < book_.orderCount()) {
-        const std::uint64_t needed = side == Side::Buy
+        const std::uint64_t needed = incoming.side() == Side::Buy
                                          ? countExecutions(book_.asks(), incoming)
                                          : countExecutions(book_.bids(), incoming);
         if (needed > tradeIdsRemaining()) {
             throw std::overflow_error("trade id space cannot cover this order's executions");
         }
     }
+}
+
+ExecutionReport MatchingEngine::submit(Order incoming) {
+    const OrderId id = incoming.id();
+    const Quantity original = incoming.originalQuantity();
+
+    if (book_.contains(id)) {
+        return rejection(Operation::Add, id, original, RejectReason::DuplicateOrderId);
+    }
+    if (!incoming.isActive()) {
+        return rejection(Operation::Add, id, original, RejectReason::OrderNotActive);
+    }
+    if (incoming.remainingQuantity() <= 0) {
+        return rejection(Operation::Add, id, original, RejectReason::InvalidQuantity);
+    }
+    ensureTradeIds(incoming);  // fail before any mutation
+    return execute(std::move(incoming), Operation::Add);
+}
+
+ExecutionReport MatchingEngine::replace(OrderId id, Price newPrice, Quantity newRemaining,
+                                        Sequence newSequence) {
+    const Order* current = book_.find(id);
+    if (current == nullptr) {
+        return rejection(Operation::Modify, id, 0, RejectReason::OrderNotFound);
+    }
+    const RejectReason invalid = Order::validate(id, newPrice, newRemaining);
+    if (invalid != RejectReason::None) {
+        return rejection(Operation::Modify, id, newRemaining, invalid);
+    }
+    if (newRemaining > std::numeric_limits<Quantity>::max() - current->executedQuantity()) {
+        return rejection(Operation::Modify, id, newRemaining, RejectReason::InvalidQuantity);
+    }
+    // Everything that can fail logically is checked while the order is still
+    // safely resting; only then is it taken out.
+    Order replacement = current->replaced(newPrice, newRemaining, newSequence);
+    ensureTradeIds(replacement);  // reads the opposite side only, unaffected by the removal
+    book_.extract(id);
+    return execute(std::move(replacement), Operation::Modify);
+}
+
+ExecutionReport MatchingEngine::execute(Order incoming, Operation operation) {
+    const OrderId id = incoming.id();
+    const Quantity original = incoming.originalQuantity();
+    const Side side = incoming.side();
+    const Side opposite = lob::opposite(side);
 
     ExecutionReport report;
-    report.operation = Operation::Add;
+    report.operation = operation;
     report.orderId = id;
     report.accepted = true;
     report.originalQuantity = original;

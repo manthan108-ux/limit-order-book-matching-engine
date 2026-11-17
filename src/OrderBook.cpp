@@ -78,13 +78,36 @@ Order OrderBook::removeFrom(Map& side, Lookup::iterator entry) {
     return removed;
 }
 
-std::optional<Order> OrderBook::cancel(OrderId id) {
+std::optional<Order> OrderBook::extract(OrderId id) {
     const auto entry = lookup_.find(id);
     if (entry == lookup_.end()) return std::nullopt;
-    Order removed = entry->second.side == Side::Buy ? removeFrom(bids_, entry)
-                                                    : removeFrom(asks_, entry);
-    removed.cancel();
+    return entry->second.side == Side::Buy ? removeFrom(bids_, entry)
+                                           : removeFrom(asks_, entry);
+}
+
+std::optional<Order> OrderBook::cancel(OrderId id) {
+    std::optional<Order> removed = extract(id);
+    if (removed) removed->cancel();
     return removed;
+}
+
+template <typename Map>
+void OrderBook::reduceIn(Map& side, Lookup::iterator entry, Quantity newRemaining) {
+    const auto levelIt = side.find(entry->second.price);
+    if (levelIt == side.end()) {
+        throw std::logic_error("order book corrupted: lookup entry has no price level");
+    }
+    levelIt->second.reduce(entry->second.handle, newRemaining);
+}
+
+void OrderBook::reduce(OrderId id, Quantity newRemaining) {
+    const auto entry = lookup_.find(id);
+    if (entry == lookup_.end()) throw std::out_of_range("reduce(): unknown order id");
+    if (entry->second.side == Side::Buy) {
+        reduceIn(bids_, entry, newRemaining);
+    } else {
+        reduceIn(asks_, entry, newRemaining);
+    }
 }
 
 template <typename Map>
