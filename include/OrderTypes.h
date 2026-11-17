@@ -36,6 +36,7 @@ enum class Operation : std::uint8_t { Add, Cancel, Modify };
 
 enum class RejectReason : std::uint8_t {
     None,
+    InvalidOrderId,   // id 0 is reserved as "no order"
     DuplicateOrderId,
     InvalidPrice,
     InvalidQuantity,
@@ -107,6 +108,7 @@ inline std::string toString(Operation o) {
 inline std::string toString(RejectReason r) {
     switch (r) {
         case RejectReason::None:             return "none";
+        case RejectReason::InvalidOrderId:   return "invalid order id (must be > 0)";
         case RejectReason::DuplicateOrderId: return "duplicate order id";
         case RejectReason::InvalidPrice:     return "invalid price (must be > 0)";
         case RejectReason::InvalidQuantity:  return "invalid quantity (must be > 0)";

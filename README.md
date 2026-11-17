@@ -2,7 +2,7 @@
 
 A modular limit order book and price-time-priority matching engine, built phase by phase with the STL.
 
-**Status: Phase 1 of 9 (scaffolding).** Order matching is not implemented yet. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The full README is written in Phase 9.
+**Status: Phase 2 of 9 (domain models: Order, Trade, PriceLevel).** The order book and order matching are not implemented yet. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The full README is written in Phase 9.
 
 ## Build
 

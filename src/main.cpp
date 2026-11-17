@@ -5,7 +5,7 @@
 #include "OrderTypes.h"
 
 int main() {
-    std::cout << "Limit Order Book & Matching Engine (Phase 1 scaffold)\n"
+    std::cout << "Limit Order Book & Matching Engine (scaffold)\n"
               << "Sides: " << lob::toString(lob::Side::Buy) << ", "
               << lob::toString(lob::Side::Sell) << "\n";
     return 0;

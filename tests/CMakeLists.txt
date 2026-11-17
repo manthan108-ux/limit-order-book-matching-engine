@@ -3,6 +3,9 @@
 # avoids any external dependency (see docs/ARCHITECTURE.md).
 set(LOB_TEST_SOURCES
   OrderTypesTests.cpp
+  OrderTests.cpp
+  TradeTests.cpp
+  PriceLevelTests.cpp
 )
 
 foreach(src ${LOB_TEST_SOURCES})

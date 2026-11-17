@@ -27,11 +27,16 @@ else()
   endif()
 endif()
 
-# Core library: domain model + matching logic, no I/O. Header-only in Phase 1;
-# source files are added to this target as later phases introduce them.
-add_library(lob_core INTERFACE)
-target_include_directories(lob_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_features(lob_core INTERFACE cxx_std_17)
+# Core library: domain model + matching logic, no I/O. Source files are added
+# here as later phases introduce them.
+add_library(lob_core STATIC
+  src/Order.cpp
+  src/Trade.cpp
+  src/PriceLevel.cpp
+)
+target_include_directories(lob_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_features(lob_core PUBLIC cxx_std_17)
+target_link_libraries(lob_core PRIVATE lob_warnings)
 
 add_executable(lob_cli src/main.cpp)
 target_link_libraries(lob_cli PRIVATE lob_core lob_warnings)

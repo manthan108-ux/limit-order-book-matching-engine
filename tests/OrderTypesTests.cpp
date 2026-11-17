@@ -71,6 +71,7 @@ TEST(PriceAndQuantityValidation) {
 
 TEST(RejectReasonMessages) {
     CHECK_EQ(toString(RejectReason::None), "none");
+    CHECK(!toString(RejectReason::InvalidOrderId).empty());
     CHECK(!toString(RejectReason::DuplicateOrderId).empty());
     CHECK(!toString(RejectReason::OrderNotFound).empty());
 }

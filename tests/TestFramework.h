@@ -70,4 +70,19 @@ inline int runAll() {
                                     std::string(#a " == " #b));           \
     } while (0)
 
+// Passes only if evaluating `expr` throws exactly an exception derived from `ex`.
+#define CHECK_THROWS(expr, ex)                                            \
+    do {                                                                  \
+        bool thrown_ = false;                                             \
+        try {                                                             \
+            (void)(expr);                                                 \
+        } catch (const ex&) {                                             \
+            thrown_ = true;                                               \
+        } catch (...) {                                                   \
+        }                                                                 \
+        if (!thrown_)                                                     \
+            ::testfw::reportFailure(__FILE__, __LINE__,                   \
+                                    std::string(#expr " throws " #ex));   \
+    } while (0)
+
 #define TEST_MAIN() int main() { return ::testfw::runAll(); }
