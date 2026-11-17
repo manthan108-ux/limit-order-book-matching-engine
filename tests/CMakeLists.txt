@@ -6,6 +6,7 @@ set(LOB_TEST_SOURCES
   OrderTests.cpp
   TradeTests.cpp
   PriceLevelTests.cpp
+  OrderBookTests.cpp
 )
 
 foreach(src ${LOB_TEST_SOURCES})
