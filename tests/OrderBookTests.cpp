@@ -515,6 +515,78 @@ TEST(BookMoveKeepsHandlesValid) {
     CHECK(consistent(b));
 }
 
+// ---- fill() and bestOrder() (added for the matching engine, Phase 4) -----
+
+TEST(BookBestOrderIsOldestAtBestPrice) {
+    OrderBook book;
+    CHECK(book.bestOrder(Side::Buy) == nullptr);
+    CHECK(book.bestOrder(Side::Sell) == nullptr);
+    book.add(buy(1, 99, 1));
+    book.add(buy(2, 100, 1));
+    book.add(buy(3, 100, 1));
+    book.add(sell(4, 105, 1));
+    book.add(sell(5, 104, 1));
+    book.add(sell(6, 104, 1));
+    CHECK_EQ(book.bestOrder(Side::Buy)->id(), 2u);   // best price, then oldest
+    CHECK_EQ(book.bestOrder(Side::Sell)->id(), 5u);
+    book.cancel(2);
+    CHECK_EQ(book.bestOrder(Side::Buy)->id(), 3u);
+    book.cancel(3);
+    CHECK_EQ(book.bestOrder(Side::Buy)->id(), 1u);   // falls to the next level
+}
+
+TEST(BookPartialFillKeepsPositionAndLookup) {
+    OrderBook book;
+    book.add(sell(1, 100, 10));
+    book.add(sell(2, 100, 10));
+    CHECK(book.fill(1, 4) == PriceLevel::FillResult::PartiallyFilled);
+    CHECK(book.contains(1));
+    CHECK_EQ(book.find(1)->remainingQuantity(), 6);
+    CHECK(book.find(1)->status() == OrderStatus::PartiallyFilled);
+    CHECK_EQ(book.bestOrder(Side::Sell)->id(), 1u);  // still first in line
+    CHECK_EQ(book.bestAsk()->totalQuantity, 16);
+    CHECK(consistent(book));
+}
+
+TEST(BookCompleteFillRemovesOrderLookupAndEmptyLevel) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    book.add(buy(2, 99, 10));
+    CHECK(book.fill(1, 10) == PriceLevel::FillResult::Filled);
+    CHECK(!book.contains(1));
+    CHECK(book.find(1) == nullptr);
+    CHECK_EQ(book.bidLevelCount(), 1u);
+    CHECK(book.bids().count(100) == 0);
+    CHECK_EQ(book.bestBid()->price, 99);
+    CHECK_EQ(book.orderCount(), 1u);
+    CHECK(consistent(book));
+    CHECK(!book.cancel(1).has_value());  // nothing stale left to cancel
+}
+
+TEST(BookFillInMiddleOfQueueLeavesNeighboursIntact) {
+    OrderBook book;
+    book.add(sell(1, 100, 5));
+    book.add(sell(2, 100, 5));
+    book.add(sell(3, 100, 5));
+    book.fill(2, 5);
+    CHECK((idsAt(book.asks().at(100)) == std::vector<OrderId>{1, 3}));
+    CHECK(book.cancel(3).has_value());  // handle of a neighbour still valid
+    CHECK_EQ(book.bestAsk()->totalQuantity, 5);
+    CHECK(consistent(book));
+}
+
+TEST(BookFillRejectsUnknownIdAndBadQuantityWithoutChange) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    CHECK_THROWS(book.fill(99, 1), std::out_of_range);
+    CHECK_THROWS(book.fill(1, 0), std::invalid_argument);
+    CHECK_THROWS(book.fill(1, -2), std::invalid_argument);
+    CHECK_THROWS(book.fill(1, 11), std::invalid_argument);
+    CHECK_EQ(book.find(1)->remainingQuantity(), 10);
+    CHECK_EQ(book.bestBid()->totalQuantity, 10);
+    CHECK(consistent(book));
+}
+
 TEST(BookDeterministicStressMatchesReferenceModel) {
     // Pseudo-random but fully deterministic (fixed-seed LCG) mix of adds and cancels,
     // checked against an independent, deliberately naive model.

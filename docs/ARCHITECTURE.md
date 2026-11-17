@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: Phases 1-3 implemented. Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
+> Status: Phases 1-4 implemented. Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
 
 ## Layering
 
@@ -9,11 +9,11 @@ CLI (src/main.cpp)            parsing + printing only, no business logic   (Phas
         |
 OrderManager                  validate, add / cancel / modify, reports     (Phase 5)
         |
-MatchingEngine                price-time matching, trade generation        (Phase 4)
+MatchingEngine                price-time matching, trade generation        (Phase 4, done)
         |
 OrderBook -> PriceLevel       storage, ordering, lookup, invariants        (Phases 2-3, done)
         |
-OrderTypes / Order / Trade / ExecutionReport   plain domain types          (Phases 1-2)
+OrderTypes / Order / Trade / ExecutionReport   plain domain types          (Phases 1-2, 4)
 ```
 
 Dependencies only point downward. The core library (`lob_core`) performs no I/O, so the CLI can be replaced by an API or a replay tool, and ExecutionReport is a plain value type.
@@ -72,7 +72,7 @@ Space is O(n) for n resting orders: one list node per order (the `Order` plus tw
 
 ## OrderBook (implemented, Phase 3: `include/OrderBook.h`, `src/OrderBook.cpp`)
 
-The book stores, indexes, cancels and queries resting orders. It does **not** match: crossing orders can rest side by side until the matching engine (Phase 4) sits on top of it.
+The book stores, indexes, cancels, fills and queries resting orders. It does **not** decide what matches: that is the matching engine's job (below), which sits on top of it. The book itself can still hold crossing orders if they are added directly.
 
 ```mermaid
 flowchart LR
@@ -143,6 +143,78 @@ I verified the checker is not vacuous with a throwaway program (not committed) t
 
 Space is O(N) for the orders, O(P) for the map nodes, and O(N) for the lookup (one hash node per order). The lookup is the extra cost of maintaining a second index: every add and cancel updates both structures, which is what makes the consistency checks necessary.
 
+## Matching engine (implemented, Phase 4: `include/MatchingEngine.h`, `src/MatchingEngine.cpp`, `include/ExecutionReport.h`)
+
+```mermaid
+flowchart TD
+    S["submit(order)"] --> V{"duplicate id,<br/>inactive, or no quantity?"}
+    V -- yes --> R["rejected ExecutionReport<br/>(book unchanged)"]
+    V -- no --> C{"trade ids scarce?<br/>(remaining ids &lt; resting orders)"}
+    C -- "needs more ids than remain" --> O["throw overflow_error<br/>(book unchanged)"]
+    C -- no --> L["best opposing order =<br/>OrderBook::bestOrder(opposite side)"]
+    L --> X{"exists and prices cross?<br/>buy: taker &gt;= maker<br/>sell: taker &lt;= maker"}
+    X -- yes --> E["qty = min(taker rem, maker rem)<br/>price = MAKER's price<br/>create Trade, OrderBook::fill(maker), fill taker"]
+    E --> M{"taker remaining > 0?"}
+    M -- yes --> L
+    M -- no --> D["report: FILLED"]
+    X -- no --> P{"taker remaining > 0?"}
+    P -- yes --> A["OrderBook::add(remainder)<br/>keeps its sequence -> back of its level"]
+    P -- no --> D
+    A --> D2["report: NEW or PARTIALLY_FILLED"]
+```
+
+### Responsibilities
+- **MatchingEngine** decides *what* trades: it picks the maker, applies the price rule and quantity, creates `Trade`s, and rests the remainder. It owns the `OrderBook` and the trade history.
+- **OrderBook** owns *how* state changes. The engine never touches maps, lists or the lookup directly; it uses only `bestOrder(side)`, `fill(id, qty)`, `add`, `contains`, `orderCount` and read-only views. The book gained exactly two operations in Phase 4:
+  - `bestOrder(side)`: the highest-priority resting order (oldest at the best price), read-only.
+  - `fill(id, qty)`: executes against a resting order by id. Partial fill: the order keeps its queue position and lookup entry, and the level aggregate is updated. Complete fill: the order leaves its level, its lookup entry is erased and an emptied level is erased, all within the call, so no stale handle survives. It validates before mutating and throws without changing anything on an unknown id or a bad quantity.
+- **PriceLevel** is unchanged. `PriceLevel::fill` already kept the aggregate right and removed completed orders.
+
+### Price-time priority
+- **Price first:** the maps are ordered best-first, so `bestOrder` is always the best price. **Then time:** within a level, the front of the list is the oldest arrival. Matching never skips an older eligible order.
+- A partially filled maker is not moved. Only its remaining quantity changes, so it keeps its place at the front.
+- A rested remainder is added with the order's original `sequence`, so it queues behind everything already at that price. The engine adds no clock or sequence of its own.
+- The incoming order trades against everything eligible, best price outward, before any remainder rests, so the book is never left crossed by a normal submission.
+
+### Execution price
+Every trade executes at the **maker's (resting) price**, so an aggressive order gets price improvement. A buy at 110 against a sell at 105 trades at 105, and a sell at 95 against a bid at 100 trades at 100. The remainder of an incoming order rests at its own limit price, not at a trade price.
+
+### Fills
+`quantity = min(taker remaining, maker remaining)`. Each execution produces its own `Trade`, so one order sweeping K resting orders yields K trades. A maker fully consumed is removed. A maker partially consumed stays with the reduced quantity as PARTIALLY_FILLED.
+
+### Trades
+- `Trade` fields: id, maker (resting) id, taker (incoming) id, taker side, price, quantity, sequence. Buyer and seller ids come from `buyOrderId()` / `sellOrderId()`, so they are correct whichever side was incoming.
+- **Timestamp:** `Trade::sequence` is the taker's `sequence`, the arrival event that caused the execution. Trades from one taker share it and are ordered by trade id. No clock is read, so runs are fully deterministic and no injectable clock was needed.
+- **Trade ids:** a plain counter starting at `firstTradeId` (default 1), issued in execution order, with no randomness. Ids are never reused and never wrap. When `UINT64_MAX` is issued the engine is exhausted, and anything that would need another id throws `std::overflow_error`. This is checked **before any mutation**: if remaining ids are fewer than the resting orders (a cheap test), the engine dry-runs the match read-only, counts the executions needed, and refuses if they exceed what remains. An order that would not trade can still rest after exhaustion.
+- The engine keeps the full history (`trades()`, a `std::vector<Trade>`), and each report carries the trades of that submission.
+
+### ExecutionReport
+A plain value type (no I/O), shared with the future order manager and CLI:
+`operation, orderId, accepted, rejectReason, status, originalQuantity, executedQuantity, remainingQuantity, trades`.
+- `accepted == false` means rejected (duplicate id, inactive order, no quantity, or invalid raw input). `status` is REJECTED and nothing changed.
+- `accepted` with `status NEW` and no trades means it rested without trading. This is distinguishable from a rejection.
+- `PARTIALLY_FILLED` means it traded and the remainder rests. `FILLED` means it fully executed and nothing rests.
+- `remainingQuantity` is the quantity still working in the book. The final state lives only in `status`, with no second flag.
+- `submit(id, side, price, qty, sequence)` validates raw input with `Order::validate` and turns invalid id, price or quantity into a rejected report. `submit(Order)` takes an already valid order.
+
+### Complexity
+P = price levels on the opposite side, K = executions (resting orders touched), N = resting orders.
+
+| Operation | Time | Notes |
+|---|---|---|
+| Best opposing price / oldest order (`bestOrder`) | O(1) | `begin()` of the ordered map and `front()` of the list |
+| One execution | O(log P) + average O(1) | hash lookup of the maker, O(1) level update, plus a map `find` to reach its level (O(log P)) and an O(log P) erase if the level empties |
+| Matching against K resting orders | O(K log P) + average O(K) | the number of executions drives the cost, not the book size |
+| Generating K trades | O(K) | one trade per execution, appended to the report and the history |
+| Removing a completely filled maker | O(log P) + average O(1) | included in the execution cost above |
+| Inserting an unfilled remainder | O(log P) + average O(1) | the same as `OrderBook::add` |
+| Trade-id exhaustion dry run | O(K) | only when remaining ids are fewer than N |
+
+An order that does not trade costs only the O(1) best-price check plus `add`. These are asymptotic statements. No latency has been measured yet (Phase 8), and nothing here claims production-grade performance.
+
+### Exception safety
+Rejections and the id-exhaustion check happen before any change. If an allocation fails part-way through a match (`bad_alloc`), every execution already applied is complete and recorded and the book still satisfies its invariants, but the incoming order is not rested (basic guarantee). Each execution records the trade before mutating, and the permanent history is pushed last.
+
 ## Data structure summary
 
 | Structure | Purpose | Why |
@@ -151,18 +223,17 @@ Space is O(N) for the orders, O(P) for the map nodes, and O(N) for the lookup (o
 | `std::map<Price, PriceLevel>` (asks) | Price levels, best ask first | Same, ascending. |
 | `std::list<Order>` inside each `PriceLevel` | FIFO queue at one price | List iterators stay valid when other elements are erased, so removing an order from the middle is O(1) with a stored iterator. `std::deque` was the suggested alternative, but erasing from the middle of a deque is O(n) and invalidates iterators. See the decision below. |
 | `std::unordered_map<OrderId, OrderLocation>` | Order ID -> (side, price, list iterator) | Average O(1) cancel/modify lookup and O(1) duplicate-ID detection. |
-| `std::vector<Trade>` *(planned, Phase 4)* | Append-only trade history | Cache-friendly sequential storage. `Trade` is immutable and copyable (not assignable), which is fine for an append-only log. |
+| `std::vector<Trade>` (in `MatchingEngine`) | Append-only trade history | Cache-friendly sequential storage. `Trade` is immutable and copyable (not assignable), which is fine for an append-only log. |
 | `std::optional` | Optional results (for example best bid on an empty side) | Avoids sentinel values. |
 
 ### Decision: `std::list` rather than `std::deque` for the level queue
 
 The specification lists both. A deque gives better cache locality but cannot delete from the middle in O(1) and does not keep iterators valid across erase. Order cancellation at an arbitrary queue position is a core requirement, and the order lookup map must hold stable handles, so `std::list` is the correct primary choice. `std::deque` is not forced into the design where it would be wrong. If the benchmarks (Phase 8) justify it, a deque with lazy deletion can be evaluated and documented as an experiment.
 
-### Priority rules *(to be implemented, Phase 5)*
-
-- Price priority first, then arrival sequence.
-- Trades execute at the resting order's price.
-- Modify: a price change cancels and re-enters the order with a new sequence (loses priority). A quantity increase also loses priority. A quantity decrease keeps priority and the order stays in place. Modifying a terminal order is rejected.
+### Priority rules
+- Price priority first, then arrival sequence. *(Phase 4, implemented)*
+- Trades execute at the resting order's price. *(Phase 4, implemented)*
+- Modify *(to be implemented, Phase 5)*: a price change cancels and re-enters the order with a new sequence (loses priority). A quantity increase also loses priority. A quantity decrease keeps priority and the order stays in place. Modifying a terminal order is rejected.
 
 ## Testing approach
 

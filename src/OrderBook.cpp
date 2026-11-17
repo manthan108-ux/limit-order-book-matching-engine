@@ -87,6 +87,34 @@ std::optional<Order> OrderBook::cancel(OrderId id) {
     return removed;
 }
 
+template <typename Map>
+PriceLevel::FillResult OrderBook::fillIn(Map& side, Lookup::iterator entry,
+                                         Quantity quantity) {
+    const auto levelIt = side.find(entry->second.price);
+    if (levelIt == side.end()) {
+        throw std::logic_error("order book corrupted: lookup entry has no price level");
+    }
+    // PriceLevel::fill validates before mutating, so a throw here changes nothing.
+    const PriceLevel::FillResult result = levelIt->second.fill(entry->second.handle, quantity);
+    if (result == PriceLevel::FillResult::Filled) {
+        lookup_.erase(entry);  // the handle just became invalid; drop it immediately
+        if (levelIt->second.empty()) side.erase(levelIt);
+    }
+    return result;
+}
+
+PriceLevel::FillResult OrderBook::fill(OrderId id, Quantity quantity) {
+    const auto entry = lookup_.find(id);
+    if (entry == lookup_.end()) throw std::out_of_range("fill(): unknown order id");
+    return entry->second.side == Side::Buy ? fillIn(bids_, entry, quantity)
+                                           : fillIn(asks_, entry, quantity);
+}
+
+const Order* OrderBook::bestOrder(Side side) const {
+    if (side == Side::Buy) return bids_.empty() ? nullptr : &bids_.begin()->second.front();
+    return asks_.empty() ? nullptr : &asks_.begin()->second.front();
+}
+
 // ---- Queries -------------------------------------------------------------
 
 const Order* OrderBook::find(OrderId id) const {

@@ -96,7 +96,22 @@ public:
     // Returns std::nullopt for an unknown id (including one already cancelled).
     std::optional<Order> cancel(OrderId id);
 
+    // Executes `quantity` against the resting order `id` (used by the matching
+    // engine). The order keeps its queue position and lookup entry on a partial
+    // fill; on a complete fill it is removed from its level, its lookup entry is
+    // erased, and the level is erased if that left it empty -- all in this call,
+    // so no stale handle can survive. Any pointer from find()/bestOrder() to
+    // that order is invalidated by a completing fill.
+    // Throws std::out_of_range for an unknown id, std::invalid_argument for a
+    // quantity outside [1, remaining]. The book is unchanged when it throws.
+    PriceLevel::FillResult fill(OrderId id, Quantity quantity);
+
     // ---- Order queries ---------------------------------------------------
+
+    // The order with the highest priority on `side`: the oldest order at the
+    // best price (best bid for Buy, best ask for Sell). nullptr if that side is
+    // empty. Read-only, non-owning; see find() for validity.
+    const Order* bestOrder(Side side) const;
 
     bool contains(OrderId id) const noexcept { return lookup_.count(id) != 0; }
 
@@ -149,6 +164,9 @@ private:
 
     template <typename Map>
     Order removeFrom(Map& side, Lookup::iterator entry);
+
+    template <typename Map>
+    PriceLevel::FillResult fillIn(Map& side, Lookup::iterator entry, Quantity quantity);
 
     template <typename Map>
     void checkSide(const Map& side, Side which, std::vector<std::string>& out,
