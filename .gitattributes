@@ -1,0 +1,9 @@
+# Let Git detect text files and normalize them to LF in the repository.
+* text=auto
+
+# Shell scripts must keep LF in every checkout (CRLF breaks the shebang on Linux/macOS).
+*.sh text eol=lf
+
+# Committed benchmark evidence is parsed by awk/bash scripts, so keep it LF as well.
+docs/benchmarks/**/*.csv text eol=lf
+docs/benchmarks/**/*.txt text eol=lf
