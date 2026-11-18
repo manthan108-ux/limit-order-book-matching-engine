@@ -2,7 +2,7 @@
 
 A modular limit order book and price-time-priority matching engine, built phase by phase with the STL.
 
-**Status: Phase 5 of 9 (domain models, order book, a price-time-priority matching engine, and an order lifecycle manager with unique ids, cancellation, modification and per-order trade history).** There is no interactive CLI yet (Phase 6). See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The full README is written in Phase 9.
+**Status: Phase 5 of 9, hardened in Phase 5.1 by deterministic fault injection (domain models, order book, a price-time-priority matching engine, and an order lifecycle manager with unique ids, cancellation, modification and per-order trade history).** There is no interactive CLI yet (Phase 6). See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The full README is written in Phase 9.
 
 ## Build
 

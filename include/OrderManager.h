@@ -13,6 +13,11 @@
 
 namespace lob {
 
+// The one violation checkConsistency() reports when recovery or trade
+// synchronization is pending (see OrderManager::recover). It is not corruption.
+inline constexpr const char* kHistoryNotCurrent =
+    "history is not current: recovery or trade synchronization is pending (call recover())";
+
 // Complete, value-based history of one order. It never refers to anything inside
 // the book, so it stays valid however the order leaves it.
 //
@@ -89,21 +94,53 @@ struct OrderRecord {
 // seller's records exactly once, so no trade can be lost or counted twice, even
 // if an operation is interrupted by an exception (the next call resumes it).
 //
-// ---- Exception safety -----------------------------------------------------
-// * Strong (nothing changed): every rejection, an exhausted trade-id space
-//   (reported as TradeIdsExhausted and recorded as REJECTED on submit, as a
-//   failed MODIFY with the order untouched on modify), cancel, in-place
-//   reduction.
-// * Allocation failure (std::bad_alloc) in the middle of a submit or a
-//   replace is the one case that is only a *basic* guarantee: executions
-//   already done stay done and are recorded, the book stays valid, but the
-//   order may no longer be resting. The manager reconciles its records before
-//   rethrowing: such an order is marked CANCELLED with CancelReason
-//   SystemFailure (or FILLED, if its executions completed it), never left
-//   "active" without a book entry. This path is not exercised by the tests.
+// ---- Exception safety (verified by tests/FaultInjectionTests.cpp) ---------
+// Three kinds of outcome, per operation:
+//  1. A rejected business operation: a normal report, nothing thrown.
+//  2. STRONG guarantee (an exception leaves everything as it was):
+//     - every operation, when the failure happens before the engine has
+//       executed anything: record creation; a submit that dies before its
+//       first execution (its record is rolled back, so the id stays free);
+//     - cancel and in-place quantity reduction never allocate at all;
+//     - the queries (order, tradesFor) never change state.
+//  3. BASIC guarantee (valid state, but not "as if nothing happened"): a
+//     std::bad_alloc after a submit or cancel/replace has ALREADY executed
+//     trades, or after a cancel/replace has taken the order out of the book.
+//     Executions done stay done and are recorded exactly once; the book keeps
+//     all its invariants; the order that could not be rested is marked
+//     CANCELLED with CancelReason::SystemFailure (cancelledQuantity = what was
+//     left), or FILLED if its executions completed it. A cancel/replace that
+//     fails before the order leaves the book leaves it untouched; one that
+//     fails after leaves it cancelled (it is NOT restored). The exception is
+//     rethrown, so the caller learns the outcome from order(id).
 //
-// Single-threaded. Memory: history grows without bound (one record per id ever
-// used); there is no pruning.
+// Bookkeeping that follows a successful engine operation (applying its trades
+// to the records) can itself fail to allocate. That does not turn a completed
+// operation into an exception: the report is returned (it comes from the
+// engine), and the records catch up at the start of the next mutating call, or
+// on an explicit recover(). Likewise, if recovery after a failure is itself
+// starved of memory, a small "in-flight" marker (no allocation) remembers the
+// unfinished order and the next call completes the recovery before doing
+// anything else. Until then isHistoryCurrent() is false and snapshots may lag;
+// they are never inconsistent with themselves (checkConsistency says so).
+// Trade ids consumed by a failed attempt are not reused, so ids may have gaps
+// after a failure (they are still unique and increasing).
+//
+// ---- API contracts kept stable ---------------------------------------------
+// * order() returns a value copy; tradesFor() returns copies.
+// * modify with no change -> rejected as NoChange; remaining quantity 0 ->
+//   rejected (use cancel). Quantity decrease keeps FIFO priority; a price
+//   change or quantity increase loses it.
+// * A recorded id (filled, cancelled or rejected) is never reused.
+//
+// ---- History retention -------------------------------------------------------
+// Every OrderRecord and every trade is kept for the manager's lifetime, and
+// every recorded id stays reserved for that lifetime. Memory grows with the
+// number of recorded orders and trades; there is no pruning API. A future
+// retention or persistence policy must keep id uniqueness (retired ids must
+// stay unavailable) and the semantics of order() / tradesFor() for old orders.
+//
+// Single-threaded.
 class OrderManager {
 public:
     // Throws std::invalid_argument if firstGeneratedId or firstTradeId is 0.
@@ -129,6 +166,19 @@ public:
     ExecutionReport modify(OrderId id, std::optional<Price> newPrice,
                            std::optional<Quantity> newQuantity);
 
+    // ---- Recovery ----------------------------------------------------------------
+
+    // Completes any bookkeeping an earlier std::bad_alloc left unfinished.
+    // Safe to call at any time, idempotent, never throws. Returns true when the
+    // history is current afterwards (false if memory is still exhausted).
+    // Every mutating operation does this first anyway.
+    bool recover() noexcept;
+    // True when no recovery is pending and every engine trade has been applied
+    // to the records. Queries are exact only while this holds.
+    bool isHistoryCurrent() const noexcept {
+        return inFlight_.id == 0 && processedTrades_ == engine_.trades().size();
+    }
+
     // ---- Queries ---------------------------------------------------------------
 
     bool knows(OrderId id) const noexcept { return records_.count(id) != 0; }
@@ -150,12 +200,34 @@ private:
     ExecutionReport process(OrderId id, Side side, Price price, Quantity quantity);
     std::optional<OrderId> allocateId();
     bool allocateSequence(Sequence& out);
+    // Applies not-yet-applied engine trades to the records, one trade at a time
+    // and each completely or not at all. Throws only std::bad_alloc (retryable)
+    // or std::logic_error (a bug).
     void syncTrades();
-    void reconcileLostOrder(OrderId id) noexcept;
+    // Same, after a successful engine operation: allocation failure is deferred.
+    void syncTradesDeferringAllocationFailure();
+    // Finishes the operation recorded in inFlight_, if any (see below).
+    void recoverInFlight();
+    // recoverInFlight() then syncTrades(): run at the start of mutating calls.
+    void prepare();
+
+    // The one submit or cancel/replace whose engine call has started but whose
+    // outcome has not yet been reconciled with the records. Plain data, so
+    // setting and clearing it cannot fail.
+    struct InFlight {
+        OrderId id = 0;                 // 0 = none
+        std::size_t tradesBefore = 0;   // engine trade count when it started
+        bool isReplace = false;         // cancel/replace (else a submit)
+        bool termsApplied = false;      // replacement terms already put on the record
+        Price price = 0;                // replacement terms
+        Sequence sequence = 0;
+        Quantity quantity = 0;
+    };
 
     MatchingEngine engine_;
     std::unordered_map<OrderId, OrderRecord> records_;
     std::size_t processedTrades_ = 0;
+    InFlight inFlight_;
 
     OrderId nextGeneratedId_;
     bool generatedIdsExhausted_ = false;

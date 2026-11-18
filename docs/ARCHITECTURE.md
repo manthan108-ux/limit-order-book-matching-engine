@@ -300,13 +300,67 @@ Worked example: BUY 100 @ 100 has executed 40, remaining 60. Modifying remaining
 ### Trade history
 The engine owns the single global trade list (`trades()`). Each `OrderRecord` stores the **indices** of its trades (buyer or seller), strictly increasing, which is execution order. `tradesFor(id)` returns copies of those trades. The records are updated only by `syncTrades()`, which walks the engine's list from a persistent cursor and applies each trade to its buyer's and seller's record exactly once (reserving capacity first, so a trade is applied completely or not at all). That makes "each trade recorded exactly once" structural, and lets an interrupted operation resume on the next call. Trades survive cancellation and full execution, since the history is never erased.
 
-### Exception safety
-- **Strong (nothing changed):** every rejection; trade-id exhaustion (a rejected submit, or a failed modify with the order untouched and still in place); cancel; in-place reduction; a failed record insertion.
-- **Basic only: allocation failure (`std::bad_alloc`) in the middle of a submit or replace.** Executions already done stay done and are recorded, and the book stays valid, but the order may no longer be resting. Before rethrowing, the manager applies those executions and marks such an order CANCELLED with `CancelReason::SystemFailure` (or FILLED if its executions completed it), so a record is never "active" without a book entry. This recovery path is **not exercised by the tests**, since the tests cannot inject allocation failures. I am not claiming a strong guarantee for it.
-- If the manager's `syncTrades` itself throws (allocation) after an operation succeeded in the engine, the records catch up at the start of the next call, but queries made before then can be stale.
+### Exception safety (Phase 5.1: verified by fault injection)
+
+Every allocation an operation makes was failed, one at a time, by `tests/FaultInjectionTests.cpp` (design below). The guarantees are stated per operation. "Strong" means an exception leaves everything exactly as it was. "Basic" means the state is valid and consistent, but the operation is only partly done.
+
+| Operation / failure point | Guarantee | Observed outcome |
+|---|---|---|
+| Business rejection (duplicate id, invalid price, no change, unknown order, ...) | n/a (a normal report, nothing thrown) | |
+| `OrderBook::add` (level node, list node, lookup node, rehash) | **Strong** | book identical; swept for books of 0..30 orders, new and existing level |
+| Rejected-submission record creation | **Strong** | no half-made record; id not burned |
+| Submit that fails **before its first execution** (record creation, first trade, resting an untraded order) | **Strong** | the record is rolled back, so the id stays free and nothing is recorded |
+| Submit that fails **after it has traded** (a later trade, or resting the remainder) | **Basic** | executions stand and are recorded exactly once; the order is CANCELLED with `SystemFailure` (`cancelledQuantity` = what was left), or FILLED if its executions completed it; the id stays retired; the exception is rethrown |
+| Cancel/replace (price change or quantity increase) failing before the order leaves the book | **Strong** | order untouched, still in its queue position |
+| Cancel/replace failing after the order left the book | **Basic** | the order is **not restored**: it is CANCELLED with `SystemFailure`, keeping its executed quantity; if it had already traded under the new terms, those trades are recorded against the new terms |
+| `cancel`, in-place quantity reduction | **Strong, and allocation-free** | measured: 0 allocations, so they cannot throw `bad_alloc` at all |
+| `OrderBook::extract` / `cancel` / `reduce` / `fill` | allocation-free | measured: 0 allocations |
+| `order()`, `tradesFor()`, `depth()` | **Strong** (they only read) | state unchanged |
+| Applying a trade to its two records | **Strong per trade** | capacity for both records is reserved before either is changed, so a trade is applied completely or not at all |
+
+**Bookkeeping after a successful engine operation.** Applying the engine's trades to the lifecycle records can itself fail to allocate. That does not turn a completed operation into an exception: `submit` / `modify` return the engine's report and the records catch up at the start of the next mutating call (or on an explicit `recover()`). Until then `isHistoryCurrent()` is false and `order()` snapshots may lag. `checkConsistency()` reports exactly one violation in that state (`kHistoryNotCurrent`), still audits each record against itself, and never reports a false mismatch with the book.
+
+**Persistent exhaustion.** If memory stays exhausted even during recovery, a small plain-data "in-flight" marker (no allocation to set or clear) remembers the unfinished submit or replace, including the replacement terms. The next mutating call, or `recover()`, completes it first: it applies the replacement terms (once only), applies the remaining trades from the persistent cursor, and then either rolls back a submit that never traded, or marks an order that is no longer in the book as lost. Recovery is idempotent and resumes from the middle of a trade list; this was verified with a second failure injected during recovery.
+
+**What is guaranteed throughout:** the book passes `checkInvariants()` after every failure point; no order is ever active twice; no lifecycle record claims an order is active while it is absent from the book (once history is current); each engine trade is applied to its buyer and its seller exactly once, and none already committed to the engine is lost; an accepted order's id is never reused (an id is only freed when its submit was rolled back before doing anything); executed quantity never decreases; `executed + remaining + cancelled == effective` always.
+
+**Known consequences:** trade ids consumed by a failed attempt are not reused, so after a failure the trade ids can have gaps (still unique and increasing). A modify that loses its order to an allocation failure leaves the caller with an exception and an order that must be read back with `order(id)`.
+
+### Fault injection (test-only design)
+
+- **Mechanism:** `tests/FaultInjection.h` plus a replacement of the global `operator new` in **one** test executable (`FaultInjectionTests.cpp`). Nothing in the library or its public API knows about it, and no other binary links it. A global `operator new` override was acceptable here because it is isolated, deterministic and does not touch the harness: it is inert unless a `FailAllocation` guard is alive; the guard is created only around the single call under test, so `iostream`, `std::string`, `CHECK` and the setup code never run while armed; and the injector itself is tested (it fails exactly the Nth allocation, persistent mode fails every later one, it counts correctly, and it disarms on scope exit).
+- **Determinism:** allocations made while armed are numbered 1, 2, 3, ... in program order. A sweep fails #1, then #2, and so on, rebuilding an identical subject each time. It stops only when the Nth allocation was never attempted (an operation may legitimately swallow a failure, so "did not throw" is not the stopping rule).
+- **Modes:** *single* (one failure), *persistent* (that allocation and every later one fails, like real exhaustion), and *double* (a second, later allocation also fails, which lands inside the operation's own recovery).
+- **Out-of-line operators:** the replacement `operator new/delete` are marked non-inlinable so GCC's `-Wmismatched-new-delete` sees each pair as a unit. The warning was not suppressed.
+- **Coverage measured (allocation points failed):** `OrderBook::add` 162 (sizes 0..30); `MatchingEngine::submit` 9; manager submit (resting) 4, (generated id) 6, (rejected record) 2; crossing submit fully filled 11, crossing submit then rest 11; deferred-history completion 11; interrupted trade application 11; modify, no cross 3; modify, crossing (3 trades) 8; `order()` / `tradesFor()` 2; plus double-failure sweeps (24 and 12 runs) and persistent variants.
+- **Defects this found in the Phase 5 code (all fixed):**
+  1. Recovery after a failure ran inside a `catch` block; if memory was still exhausted it silently gave up and nothing retried it, leaving a record ACTIVE while the order was absent from the book and trades unapplied.
+  2. A `bad_alloc` while applying trades to the records, **after** the engine had finished, made `submit`/`modify` throw even though the order was resting and the trades had executed. A retry would be rejected as a duplicate.
+  3. A submit that failed before executing anything left a CANCELLED/`SystemFailure` record and burned its id, when a clean rollback was possible.
+- **Mutation check (not committed):** scratch copies of the manager with the fixes disabled or broken (no deferral, no next-call recovery, no rollback, lost order never marked, replacement terms never applied or re-applied on every retry, trades applied to one side only, reservation removed) each fail the suite.
+
+### Remaining failure scenarios the tests cannot reach
+
+- Allocation failures inside the standard library that do not go through `operator new`, and failures on `std::terminate` paths.
+- Exhaustion of non-heap resources (stack, handles).
+- A failure inside `checkConsistency()` or `checkInvariants()` themselves; these are diagnostics and not part of any guarantee.
+- Only `std::bad_alloc` is injected. A hard crash or power loss is not modelled (no persistence exists).
+- Interleavings with more than two simultaneous failures were not enumerated (single, persistent and pairs were).
+
+### History retention policy
+
+Every `OrderRecord` and every trade is kept for the lifetime of the `OrderManager`, and every recorded id stays reserved for that lifetime (so an id can never be reused, even after the order is filled or cancelled). Memory therefore grows with the number of recorded orders and trades. There is deliberately **no pruning API**. Any future retention or persistence policy must preserve id uniqueness (retired ids must stay unavailable) and the semantics of `order()` and `tradesFor()` for old orders.
+
+### API contracts (kept stable)
+
+- `order()` returns a value copy; `tradesFor()` returns copies.
+- `modify` with no change is rejected as `NoChange`. Remaining quantity 0 is rejected (cancel is the operation for that).
+- A quantity decrease keeps FIFO priority. A price change or a quantity increase loses it.
+- A recorded id (filled, cancelled or rejected) is never reused.
+- After an exception from a mutating call, call `recover()` (or any mutating call) and check `isHistoryCurrent()` before trusting snapshots.
 
 ### Verification aid
-`checkConsistency()` (O(records + trades)) runs the book's invariants and checks every record against the book (active records rest with identical side/price/quantities/sequence; terminal records are absent), status/quantity coherence, that each record's trades involve it, are increasing and sum to its executed quantity, and that every trade is recorded exactly once on its buyer and once on its seller.
+`checkConsistency()` (O(records + trades)) runs the book's invariants and checks every record against the book (active records rest with identical side/price/quantities/sequence; terminal records are absent), status/quantity coherence, that each record's trades involve it, are increasing and sum to its executed quantity, and that every trade is recorded exactly once on its buyer and once on its seller. If recovery or trade synchronization is pending (see Exception safety), it reports the single `kHistoryNotCurrent` notice, audits each record against itself and the trades already applied, and skips only the comparison with the book.
 
 ### Complexity (N = records, T = trades, P = price levels on the order's side, k = executions, t_o = trades of one order)
 

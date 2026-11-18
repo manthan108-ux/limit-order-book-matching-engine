@@ -9,6 +9,7 @@ set(LOB_TEST_SOURCES
   OrderBookTests.cpp
   MatchingEngineTests.cpp
   OrderManagerTests.cpp
+  FaultInjectionTests.cpp
 )
 
 foreach(src ${LOB_TEST_SOURCES})

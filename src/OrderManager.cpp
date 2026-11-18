@@ -112,27 +112,71 @@ void OrderManager::syncTrades() {
     }
 }
 
-void OrderManager::reconcileLostOrder(OrderId id) noexcept {
+void OrderManager::syncTradesDeferringAllocationFailure() {
     try {
         syncTrades();
-    } catch (...) {
-        return;  // records are incomplete; do not guess
+    } catch (const std::bad_alloc&) {
+        // The engine operation already succeeded and its report is valid. The
+        // cursor has not moved past an unapplied trade, so the next call (or
+        // recover()) finishes the job; nothing is lost or applied twice.
     }
-    const auto it = records_.find(id);
-    if (it == records_.end()) return;
+}
+
+void OrderManager::recoverInFlight() {
+    if (inFlight_.id == 0) return;
+    const auto it = records_.find(inFlight_.id);
+    if (it == records_.end()) {
+        inFlight_ = InFlight{};
+        return;
+    }
     OrderRecord& r = it->second;
-    if (r.isActive() && !engine_.book().contains(id)) {
+    const bool executed = engine_.trades().size() > inFlight_.tradesBefore;
+
+    // A replacement that traded: its executions were taken from the NEW terms, so
+    // put those on the record before the trades are applied (once only).
+    if (inFlight_.isReplace && executed && !inFlight_.termsApplied) {
+        r.price = inFlight_.price;
+        r.sequence = inFlight_.sequence;
+        r.remainingQuantity = inFlight_.quantity;
+        r.effectiveQuantity = r.executedQuantity + inFlight_.quantity;
+        inFlight_.termsApplied = true;
+    }
+    syncTrades();  // may throw bad_alloc: inFlight_ stays set and the retry resumes here
+
+    const OrderId id = inFlight_.id;
+    const bool resting = engine_.book().contains(id);
+    if (!inFlight_.isReplace && !executed && !resting) {
+        records_.erase(it);  // the submit never took effect: forget it, the id stays free
+    } else if (r.isActive() && !resting) {
+        // Executions happened (or the order was taken out for replacement) but it
+        // could not be rested again: it is gone, and the record must say so.
         r.cancelledQuantity = r.remainingQuantity;
         r.remainingQuantity = 0;
         r.status = OrderStatus::Cancelled;
         r.cancelReason = CancelReason::SystemFailure;
     }
+    inFlight_ = InFlight{};
+}
+
+void OrderManager::prepare() {
+    recoverInFlight();
+    syncTrades();
+}
+
+bool OrderManager::recover() noexcept {
+    try {
+        prepare();
+    } catch (...) {
+        // Still starved of memory (or, in theory, an internal error): the pending
+        // work is kept and the next call retries it.
+    }
+    return isHistoryCurrent();
 }
 
 // ---- Submission --------------------------------------------------------------
 
 ExecutionReport OrderManager::submit(Side side, Price price, Quantity quantity) {
-    syncTrades();
+    prepare();
     if (!validSide(side)) return unrecorded(Operation::Add, 0, quantity, RejectReason::InvalidSide);
     const std::optional<OrderId> id = allocateId();
     if (!id) return unrecorded(Operation::Add, 0, quantity, RejectReason::IdSpaceExhausted);
@@ -140,7 +184,7 @@ ExecutionReport OrderManager::submit(Side side, Price price, Quantity quantity) 
 }
 
 ExecutionReport OrderManager::submit(OrderId id, Side side, Price price, Quantity quantity) {
-    syncTrades();
+    prepare();
     if (!validSide(side)) return unrecorded(Operation::Add, id, quantity, RejectReason::InvalidSide);
     if (id == 0) return unrecorded(Operation::Add, id, quantity, RejectReason::InvalidOrderId);
     if (knows(id)) return unrecorded(Operation::Add, id, quantity, RejectReason::DuplicateOrderId);
@@ -178,34 +222,46 @@ ExecutionReport OrderManager::process(OrderId id, Side side, Price price, Quanti
     // never lacks one. If emplace throws, nothing has happened yet.
     OrderRecord& r = records_.emplace(id, std::move(rec)).first->second;
 
+    // Remember the unfinished submit in plain data BEFORE the engine runs, so that
+    // whatever happens next, a later call can reconcile it without allocating.
+    inFlight_ = InFlight{id, engine_.trades().size(), false, false, 0, 0, 0};
     ExecutionReport engineReport;
     try {
         engineReport = engine_.submit(*Order::create(id, side, OrderType::Limit, price,
                                                       quantity, sequence));
     } catch (const std::overflow_error&) {
         // Raised before the engine changed anything: the order never existed.
+        inFlight_ = InFlight{};
         r.status = OrderStatus::Rejected;
         r.rejectReason = RejectReason::TradeIdsExhausted;
         r.remainingQuantity = 0;
         return reportFor(Operation::Add, r, false, RejectReason::TradeIdsExhausted);
     } catch (...) {
-        reconcileLostOrder(id);
+        // Allocation failure inside the engine. Reconcile now if we can; if that
+        // too runs out of memory, inFlight_ stays set and the next call does it.
+        try {
+            recoverInFlight();
+        } catch (...) {
+        }
         throw;
     }
+    inFlight_ = InFlight{};
     if (!engineReport.accepted) {  // not reachable with the checks above; kept for safety
         r.status = OrderStatus::Rejected;
         r.rejectReason = engineReport.rejectReason;
         r.remainingQuantity = 0;
         return reportFor(Operation::Add, r, false, engineReport.rejectReason);
     }
-    syncTrades();
-    return reportFor(Operation::Add, r, true, RejectReason::None, std::move(engineReport.trades));
+    // The engine's report is complete and authoritative; applying the trades to the
+    // records may be deferred if memory is short (see syncTradesDeferring...).
+    syncTradesDeferringAllocationFailure();
+    return engineReport;
 }
 
 // ---- Cancellation ---------------------------------------------------------------
 
 ExecutionReport OrderManager::cancel(OrderId id) {
-    syncTrades();
+    prepare();
     const auto it = records_.find(id);
     if (it == records_.end()) return unrecorded(Operation::Cancel, id, 0, RejectReason::OrderNotFound);
     OrderRecord& r = it->second;
@@ -225,7 +281,7 @@ ExecutionReport OrderManager::cancel(OrderId id) {
 
 ExecutionReport OrderManager::modify(OrderId id, std::optional<Price> newPrice,
                                      std::optional<Quantity> newQuantity) {
-    syncTrades();
+    prepare();
     const auto it = records_.find(id);
     if (it == records_.end()) return unrecorded(Operation::Modify, id, 0, RejectReason::OrderNotFound);
     OrderRecord& r = it->second;
@@ -259,31 +315,35 @@ ExecutionReport OrderManager::modify(OrderId id, std::optional<Price> newPrice,
     Sequence sequence = 0;
     if (!allocateSequence(sequence)) return fail(RejectReason::IdSpaceExhausted);
 
-    const auto applyTerms = [&] {
-        r.price = price;
-        r.sequence = sequence;
-        r.remainingQuantity = quantity;
-        r.effectiveQuantity = r.executedQuantity + quantity;
-    };
-
-    const std::size_t tradesBefore = engine_.trades().size();
+    // Plain data, set before the engine runs: if the engine fails part-way, a later
+    // call can still finish the job (see recoverInFlight) without allocating.
+    inFlight_ = InFlight{id, engine_.trades().size(), true, false, price, sequence, quantity};
     ExecutionReport engineReport;
     try {
         engineReport = engine_.replace(id, price, quantity, sequence);
     } catch (const std::overflow_error&) {
         // Thrown before the engine touched the book: the order is exactly as it was.
+        inFlight_ = InFlight{};
         return fail(RejectReason::TradeIdsExhausted);
     } catch (...) {
-        // Allocation failure part-way through. If the replacement already traded, its
-        // new terms apply to those trades; if it never got that far the old terms stand.
-        if (engine_.trades().size() > tradesBefore) applyTerms();
-        reconcileLostOrder(id);
+        // Allocation failure part-way through. recoverInFlight() puts the new terms on
+        // the record only if the replacement had already traded, applies those trades,
+        // and marks the order lost if it is no longer in the book. If memory is still
+        // exhausted, inFlight_ stays set and the next call completes it.
+        try {
+            recoverInFlight();
+        } catch (...) {
+        }
         throw;
     }
+    inFlight_ = InFlight{};
     if (!engineReport.accepted) return fail(engineReport.rejectReason);  // defensive
-    applyTerms();
-    syncTrades();  // subtracts any executions from the new remaining quantity
-    return reportFor(Operation::Modify, r, true, RejectReason::None, std::move(engineReport.trades));
+    r.price = price;  // plain assignments: cannot fail
+    r.sequence = sequence;
+    r.remainingQuantity = quantity;
+    r.effectiveQuantity = r.executedQuantity + quantity;
+    syncTradesDeferringAllocationFailure();  // subtracts the executions from the new remaining
+    return engineReport;
 }
 
 // ---- Queries ----------------------------------------------------------------------
@@ -312,8 +372,12 @@ InvariantReport OrderManager::checkConsistency() const {
     const OrderBook& book = engine_.book();
     const std::vector<Trade>& trades = engine_.trades();
 
-    if (processedTrades_ != trades.size()) {
-        v.push_back("trade cursor is behind the engine's trade list");
+    // Full audit needs the history to be current. While recovery or trade
+    // synchronization is pending, say so and audit only what stays valid
+    // regardless: each record against itself, and the trades already applied.
+    const bool current = isHistoryCurrent();
+    if (!current) {
+        v.push_back(std::string(kHistoryNotCurrent));
     }
 
     std::vector<int> timesRecorded(trades.size(), 0);
@@ -366,8 +430,10 @@ InvariantReport OrderManager::checkConsistency() const {
 
         // Record vs. book: active <=> resting, with identical terms.
         const Order* resting = book.find(entry.first);
-        if (r.isActive()) {
-            ++activeRecords;
+        if (r.isActive()) ++activeRecords;
+        if (!current) {
+            // Not compared with the book: the book may legitimately be ahead of the records.
+        } else if (r.isActive()) {
             if (resting == nullptr) {
                 v.push_back(who + "active record but the order is not in the book");
             } else if (resting->side() != r.side || resting->price() != r.price ||
@@ -406,13 +472,15 @@ InvariantReport OrderManager::checkConsistency() const {
     }
 
     for (std::size_t i = 0; i < timesRecorded.size(); ++i) {
-        if (timesRecorded[i] != 2) {
+        // Trades the cursor has passed are on exactly two records; later ones on none.
+        const int expected = i < processedTrades_ ? 2 : 0;
+        if (timesRecorded[i] != expected) {
             v.push_back("trade " + std::to_string(i) + " recorded " +
                         std::to_string(timesRecorded[i]) +
-                        " times (expected exactly once for buyer and once for seller)");
+                        " times (expected " + std::to_string(expected) + ": once for buyer and once for seller)");
         }
     }
-    if (activeRecords != book.orderCount()) {
+    if (current && activeRecords != book.orderCount()) {
         v.push_back("active records (" + std::to_string(activeRecords) + ") != orders in book (" +
                     std::to_string(book.orderCount()) + ")");
     }
