@@ -16,6 +16,7 @@
 #include "Duel.h"
 #include "TestFramework.h"
 #include "TestRng.h"
+#include "WorkloadGenerator.h"
 
 using namespace lob;
 
@@ -23,117 +24,33 @@ namespace {
 
 constexpr Side B = Side::Buy;
 constexpr Side S = Side::Sell;
-
-struct Profile {
-    const char* name;
-    std::int64_t mid;       // price the market starts around
-    std::int64_t spread;    // half-width of the price band around the drifting mid
-    std::int64_t maxQty;
-};
-
-// Narrow: constant crossing, deep queues at few prices. Wide: many price levels.
-// Mixed: moderate band, larger quantities (partial fills of big orders).
-const Profile kNarrow{"narrow", 1000, 3, 20};
-const Profile kWide{"wide", 1000, 60, 40};
-const Profile kMixed{"mixed", 500, 12, 300};
+// The generator itself (profiles, operation mix, RNG call order) lives in
+// WorkloadGenerator.h so the Phase 8 benchmarks time exactly these workloads.
+using workload::Profile;
+using workload::kNarrow;
+using workload::kWide;
+using workload::kMixed;
 
 class Workload {
 public:
     Workload(const Profile& p, std::uint64_t seed, int ops, int auditEvery)
-        : profile_(p), seed_(seed), ops_(ops),
-          duel_(std::string(p.name) + "/" + std::to_string(ops) + "ops", seed, auditEvery), rng_(seed), mid_(p.mid) {}
+        : ops_(ops),
+          duel_(std::string(p.name) + "/" + std::to_string(ops) + "ops", seed, auditEvery),
+          generator_(duel_, p, seed) {}
 
     Duel& duel() { return duel_; }
 
     void run() {
-        for (int i = 0; i < ops_ && duel_.clean(); ++i) {
-            if (i % 40 == 0) mid_ += rng_.between(-2, 2);  // the market drifts
-            step();
-        }
+        generator_.run(ops_);
         duel_.checkEverything("end of workload");
     }
 
 private:
-    Price priceFor(Side side) {
-        // Buyers lean below the mid, sellers above, so the book builds depth but crosses often.
-        const std::int64_t lean = side == B ? -1 : 1;
-        Price p = mid_ + lean + rng_.between(-profile_.spread, profile_.spread);
-        if (rng_.chance(3)) p += lean * rng_.between(0, profile_.spread * 3);  // an occasional far order
-        return p < 1 ? 1 : p;
-    }
-    Quantity qty() { return rng_.between(1, profile_.maxQty); }
-    Side side() { return rng_.chance(50) ? B : S; }
-
-    // Target for a cancel / modify. Mostly a live order (otherwise nearly every cancel
-    // would hit an already-terminal one and the interesting transitions would be rare),
-    // sometimes any recorded id (terminal orders), sometimes an unknown id.
-    OrderId pickKnown() {
-        if (duel_.ids.empty() || rng_.chance(5)) return 9000000 + rng_.below(1000);  // unknown id
-        for (int attempts = 0; attempts < 4 && !live_.empty() && rng_.chance(80); ++attempts) {
-            const std::size_t i = rng_.below(live_.size());
-            const auto it = duel_.model.orders().find(live_[i]);
-            if (it != duel_.model.orders().end() && it->second.active()) return live_[i];
-            live_[i] = live_.back();  // it went terminal: drop it from the pool
-            live_.pop_back();
-        }
-        return duel_.ids[rng_.below(duel_.ids.size())];
-    }
-
-    // Remembers an accepted order that may still be resting.
-    void remember(const ExecutionReport& r) {
-        if (r.accepted && r.remainingQuantity > 0) live_.push_back(r.orderId);
-    }
-
-    void step() {
-        const std::uint64_t r = rng_.below(100);
-        if (r < 30) {                                   // submit, generated id
-            const Side s = side();
-            remember(duel_.submit(s, priceFor(s), qty()));
-        } else if (r < 40) {                            // submit, client id
-            const Side s = side();
-            remember(duel_.submit(1000000 + nextClient_++, s, priceFor(s), qty()));
-        } else if (r < 43) {                            // duplicate id (active or terminal)
-            if (duel_.ids.empty()) return;
-            const Side s = side();
-            duel_.submit(duel_.ids[rng_.below(duel_.ids.size())], s, priceFor(s), qty());
-        } else if (r < 48) {                            // invalid submissions
-            const Side s = side();
-            switch (rng_.below(5)) {
-                case 0: duel_.submit(s, 0, qty()); break;
-                case 1: duel_.submit(s, -rng_.between(1, 50), qty()); break;
-                case 2: duel_.submit(s, priceFor(s), 0); break;
-                case 3: duel_.submit(s, priceFor(s), -rng_.between(1, 50)); break;
-                default: duel_.submit(0, s, priceFor(s), qty()); break;   // id 0
-            }
-        } else if (r < 63) {                            // cancel (mostly live, some terminal, some unknown)
-            duel_.cancel(pickKnown());
-        } else if (r < 85) {                            // modify
-            std::optional<Price> p;
-            std::optional<Quantity> q;
-            if (rng_.chance(55)) p = rng_.chance(4) ? 0 : mid_ + rng_.between(-profile_.spread, profile_.spread);
-            if (rng_.chance(55)) q = rng_.chance(4) ? -rng_.between(0, 5) : qty();
-            remember(duel_.modify(pickKnown(), p, q));
-        } else if (r < 93) {                            // a cluster of orders at one price (deep FIFO queue)
-            const Side s = side();
-            const Price p = priceFor(s);
-            const int n = static_cast<int>(rng_.between(3, 6));
-            for (int i = 0; i < n && duel_.clean(); ++i) remember(duel_.submit(s, p, qty()));
-        } else {                                        // an aggressive sweep across levels
-            const Side s = side();
-            const Price p = s == B ? mid_ + profile_.spread * 2 : std::max<Price>(1, mid_ - profile_.spread * 2);
-            remember(duel_.submit(s, p, profile_.maxQty * rng_.between(2, 8)));
-        }
-    }
-
-    const Profile& profile_;
-    std::uint64_t seed_;
     int ops_;
     Duel duel_;
-    TestRng rng_;
-    Price mid_;
-    OrderId nextClient_ = 1;
-    std::vector<OrderId> live_;
+    workload::Generator<Duel> generator_;
 };
+
 
 std::uint64_t checksum(const OrderManager& m) {
     std::uint64_t h = 1469598103934665603ULL;
@@ -205,6 +122,38 @@ TEST(WorkloadsActuallyExerciseTheInterestingStates) {
     CHECK(active > 5);
     CHECK(multiTrade > 5);
     CHECK(modified > 20);
+}
+
+TEST(SharedGeneratorOutputIsPinnedToKnownDigests) {
+    // WorkloadGenerator.h is shared with the Phase 8 benchmarks, so a change to the random
+    // number sequence per step would silently change both the checked and the timed
+    // workloads. These digests (trade-stream checksum, trade count, record count) were
+    // captured before the generator was extracted from this file and must never change
+    // unless the workloads are deliberately redefined.
+    struct Pin {
+        const Profile* profile;
+        std::uint64_t seed;
+        std::uint64_t digest;
+        std::size_t trades;
+        std::size_t records;
+    };
+    const Pin pins[] = {
+        {&kNarrow, 1, 8900398662725287029ULL, 458, 590},       {&kNarrow, 42, 1517268087261711471ULL, 458, 719},
+        {&kNarrow, 2024, 6726165933384393645ULL, 447, 579},    {&kNarrow, 271828, 10949259531522057268ULL, 486, 581},
+        {&kWide, 1, 2079523719211588912ULL, 445, 566},         {&kWide, 42, 3165987238706258959ULL, 505, 628},
+        {&kWide, 2024, 8595015057447504280ULL, 484, 593},      {&kWide, 271828, 790405433649711473ULL, 507, 614},
+        {&kMixed, 1, 15657018691410206558ULL, 496, 590},       {&kMixed, 42, 16476716690820334895ULL, 528, 693},
+        {&kMixed, 2024, 6740167358053723783ULL, 436, 586},     {&kMixed, 271828, 4018767571859789768ULL, 502, 603},
+    };
+    for (const Pin& pin : pins) {
+        Workload w(*pin.profile, pin.seed, 700, 700);
+        w.run();
+        CHECK_MSG(w.duel().clean(), w.duel().failure());
+        const std::string who = std::string(pin.profile->name) + " seed " + std::to_string(pin.seed);
+        CHECK_MSG(checksum(w.duel().manager) == pin.digest, who + ": the generated workload changed (digest)");
+        CHECK_MSG(w.duel().manager.trades().size() == pin.trades, who + ": trade count changed");
+        CHECK_MSG(w.duel().manager.recordedOrderCount() == pin.records, who + ": record count changed");
+    }
 }
 
 TEST(WorkloadsAreReproducibleFromTheirSeed) {

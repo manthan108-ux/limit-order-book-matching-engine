@@ -37,6 +37,14 @@ public:
     std::vector<lob::OrderId> ids;  // every id the model has recorded, in first-seen order
 
     bool clean() const { return failure_.empty(); }
+
+    // The interface workload::Generator (WorkloadGenerator.h) needs from a target.
+    const std::vector<lob::OrderId>& knownIds() const { return ids; }
+    bool isActive(lob::OrderId id) const {
+        const auto it = model.orders().find(id);
+        return it != model.orders().end() && it->second.active();
+    }
+    bool healthy() const { return clean(); }
     const std::string& failure() const { return failure_; }
     int operations() const { return ops_; }
 

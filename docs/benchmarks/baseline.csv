@@ -1,0 +1,182 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 44.2 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 21
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --reps 21 --warmup 2 --lat-reps 3 --csv docs/benchmarks/baseline.csv
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+submit_resting,layer=book,preload=100000;levels=1000;ops=50000,core,50000,21,2,183.33,174.76,433.94,265.21,107.15,40.40,5454585,5722199,9.167,,batch_mean(110),1365,305.5,1114.5,1401.8,2120.0,
+submit_resting,layer=engine,preload=100000;levels=1000;ops=50000,core,50000,21,2,547.50,539.48,566.88,549.86,7.40,1.34,1826484,1853644,27.375,,batch_mean(37),4056,462.2,873.0,2918.9,4421.6,
+submit_resting,layer=manager,preload=100000;levels=1000;ops=50000,core,50000,21,2,842.95,738.81,870.17,837.60,31.63,3.78,1186316,1353532,42.147,,batch_mean(24),6252,675.0,1262.5,5383.3,15812.5,
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,core,50000,21,2,91.92,90.66,93.63,91.90,0.73,0.80,10878552,11030466,4.596,,batch_mean(218),690,90.8,95.9,163.3,168.3,
+cancel_in_queue,layer=book;order=middle-out,queue=50000,core,50000,21,2,96.95,95.62,101.23,97.24,1.29,1.32,10314595,10458282,4.848,,batch_mean(207),726,95.7,101.9,113.0,174.4,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,core,50000,21,2,91.15,89.88,92.96,91.12,0.92,1.01,10970927,11125946,4.558,,batch_mean(220),684,89.5,104.1,144.1,175.5,
+cancel_in_queue,layer=engine;order=oldest-first,queue=50000,core,50000,21,2,91.13,90.56,92.94,91.34,0.62,0.68,10973094,11042647,4.557,,batch_mean(220),684,90.5,95.5,160.0,170.0,
+cancel_in_queue,layer=engine;order=middle-out,queue=50000,core,50000,21,2,96.51,95.97,98.42,96.80,0.70,0.73,10361406,10420140,4.826,,batch_mean(208),723,95.7,110.1,182.2,205.3,
+cancel_in_queue,layer=engine;order=newest-first,queue=50000,core,50000,21,2,91.09,89.92,93.55,91.28,0.98,1.07,10977671,11121491,4.555,,batch_mean(220),684,90.0,117.3,164.1,202.7,
+cancel_in_queue,layer=manager;order=oldest-first,queue=50000,core,50000,21,2,112.13,110.63,116.44,112.72,1.54,1.37,8917902,9038813,5.607,,batch_mean(179),840,110.6,121.2,142.4,221.8,
+cancel_in_queue,layer=manager;order=middle-out,queue=50000,core,50000,21,2,125.61,124.32,128.05,125.74,1.00,0.80,7961023,8043887,6.281,,batch_mean(160),939,124.4,135.6,223.8,317.5,
+cancel_in_queue,layer=manager;order=newest-first,queue=50000,core,50000,21,2,111.04,109.53,113.59,111.28,1.14,1.03,9005764,9130085,5.552,,batch_mean(181),831,108.3,115.5,200.6,404.4,
+cancel_at_level,layer=book;levels=best,levels=10000;per_level=20;cancel_levels=1000,core,19000,21,2,115.12,110.48,117.46,115.06,1.76,1.53,8686508,9051498,2.187,,batch_mean(174),330,114.9,123.0,147.7,223.0,
+cancel_at_level,layer=book;levels=worst,levels=10000;per_level=20;cancel_levels=1000,core,19000,21,2,121.09,119.39,125.51,121.47,1.55,1.28,8258356,8375579,2.301,,batch_mean(166),345,119.3,138.0,236.7,13999.4,
+cancel_at_level,layer=manager;levels=best,levels=10000;per_level=20;cancel_levels=1000,core,19000,21,2,134.49,131.03,140.00,134.56,2.10,1.56,7435235,7632055,2.555,,batch_mean(149),384,131.5,143.6,181.9,277.2,
+cancel_at_level,layer=manager;levels=worst,levels=10000;per_level=20;cancel_levels=1000,core,19000,21,2,146.82,112.30,1386.83,203.36,271.33,133.42,6811012,8904720,2.790,,batch_mean(137),417,145.3,194.2,554.0,7746.0,
+cancel_random,layer=book,preload=100000;levels=1000;ops=20000,core,20000,21,2,620.53,592.11,644.67,620.36,12.08,1.95,1611526,1688890,12.411,,batch_mean(33),1821,609.1,678.8,1178.8,2348.5,
+cancel_random,layer=engine,preload=100000;levels=1000;ops=20000,core,20000,21,2,650.49,538.32,1403.94,771.97,273.09,35.38,1537303,1857648,13.010,,batch_mean(31),1938,625.8,983.9,1567.7,71448.4,
+cancel_random,layer=manager,preload=100000;levels=1000;ops=20000,core,20000,21,2,746.96,669.89,2051.47,866.03,341.20,39.40,1338760,1492782,14.939,,batch_mean(27),2223,725.9,803.7,1429.6,3477.8,
+modify,kind=qty-decrease(in-place),preload=100000;levels=1000;ops=20000,core,20000,21,2,454.40,376.18,470.54,449.50,19.37,4.31,2200680,2658302,9.088,,batch_mean(45),1335,406.7,502.2,835.6,2784.4,
+modify,kind=qty-increase(replace),preload=100000;levels=1000;ops=20000,core,20000,21,2,1309.02,1251.05,1767.08,1364.91,139.31,10.21,763933,799332,26.180,,batch_mean(16),3750,1275.0,1600.0,2481.2,7418.8,
+modify,kind=price-change(replace),preload=100000;levels=1000;ops=20000,core,20000,21,2,1188.91,1176.74,1349.72,1202.89,39.17,3.26,841103,849802,23.778,,batch_mean(17),3531,1158.8,1529.4,2329.4,8388.2,
+match_one_to_one,layer=engine,trades=50000,core,50000,21,2,287.66,284.74,306.26,290.31,5.22,1.80,3476375,3512001,14.383,,batch_mean(70),2145,232.9,338.6,1210.0,16385.7,
+match_one_to_many,layer=engine,trades=50000;makers=50000;levels=1,core,50000,21,2,255.02,237.47,287.04,260.23,14.22,5.47,3921323,4211094,12.751,,,,,,,,
+match_many_to_one,layer=engine,trades=50000,core,50000,21,2,202.54,189.10,206.68,199.38,5.87,2.94,4937345,5288319,10.127,,batch_mean(99),1518,144.4,224.2,1184.8,11552.5,
+match_multi_level,layer=engine,levels=5000;per_level=1;trades=5000,core,5000,21,2,370.46,315.02,382.80,366.90,15.68,4.27,2699347,3174402,1.852,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=500;trades=50000,core,50000,21,2,248.74,241.03,275.53,254.13,10.60,4.17,4020262,4148896,12.437,,,,,,,,
+match_one_to_one,layer=manager,trades=50000,core,50000,21,2,745.19,734.94,769.57,749.58,10.33,1.38,1341943,1360648,37.259,,batch_mean(27),5556,548.1,877.8,3603.7,145633.3,
+match_one_to_many,layer=manager,trades=50000;makers=50000;levels=1,core,50000,21,2,429.47,420.79,477.37,435.25,15.54,3.57,2328451,2376460,21.474,,,,,,,,
+match_many_to_one,layer=manager,trades=50000,core,50000,21,2,574.04,561.43,588.61,574.66,7.02,1.22,1742045,1781153,28.702,,batch_mean(35),4287,391.4,731.4,2480.0,62482.9,
+match_multi_level,layer=manager,levels=5000;per_level=1;trades=5000,core,5000,21,2,432.42,412.80,461.00,434.12,10.49,2.42,2312566,2422481,2.162,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=500;trades=50000,core,50000,21,2,417.13,404.64,432.36,417.65,6.28,1.50,2397346,2471320,20.856,,,,,,,,
+market_data,query=bestBid,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,21,2,2.75,2.74,2.80,2.76,0.01,0.54,363411709,364723904,5.503,,batch_mean(7269),828,2.6,2.6,3.6,11.3,
+market_data,query=bestAsk,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,21,2,3.27,3.26,3.41,3.28,0.03,0.97,306058427,306875547,6.535,,batch_mean(6122),981,2.8,2.8,3.1,4.1,
+market_data,query=spread,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,21,2,3.38,3.37,3.41,3.38,0.01,0.27,295853612,296727100,6.760,,batch_mean(5918),1014,3.3,3.3,4.5,5.3,
+market_data,query=midPrice,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,21,2,6.19,6.18,6.22,6.19,0.01,0.24,161627916,161838485,12.374,,batch_mean(3233),1857,6.0,6.1,8.2,18.8,
+market_data,query=depth(1),orders=100000;levels_per_side=1000;ops=50000,core,50000,21,2,177.90,176.73,180.26,178.06,0.96,0.54,5621009,5658349,8.895,,batch_mean(113),1329,177.9,180.5,243.4,746.9,
+market_data,query=depth(5),orders=100000;levels_per_side=1000;ops=50000,core,50000,21,2,228.75,226.85,230.60,228.82,1.00,0.44,4371623,4408160,11.437,,batch_mean(88),1707,228.4,235.2,295.5,379.5,
+market_data,query=depth(20),orders=100000;levels_per_side=1000;ops=50000,core,50000,21,2,468.08,464.38,475.08,468.39,3.12,0.67,2136369,2153409,23.404,,batch_mean(43),3489,469.8,486.0,646.5,2837.2,
+market_data,query=depth(100),orders=100000;levels_per_side=1000;ops=50000,core,50000,21,2,1927.21,1922.39,1945.34,1928.73,4.90,0.25,518884,520185,96.361,,batch_mean(16),9375,2006.2,2050.0,2618.8,6693.8,
+order_lookup,query=book.find,orders=100000;levels_per_side=1000;ops=500000,core,500000,21,2,32.78,30.39,33.56,32.65,0.78,2.40,30506406,32906211,16.390,,batch_mean(611),2457,32.6,35.7,59.2,155.5,
+order_lookup,query=book.contains,orders=100000;levels_per_side=1000;ops=500000,core,500000,21,2,21.86,18.52,22.14,21.37,1.06,4.97,45742306,54000929,10.931,,batch_mean(915),1641,22.1,24.2,40.8,81.0,
+order_lookup,query=manager.knows,orders=100000;levels_per_side=1000;ops=500000,core,500000,21,2,24.90,21.70,25.45,24.82,0.78,3.13,40164836,46074456,12.449,,batch_mean(804),1866,24.9,27.4,38.3,57.8,
+order_lookup,query=manager.order,orders=100000;levels_per_side=1000;ops=500000,core,500000,21,2,67.36,62.74,71.14,67.21,1.62,2.42,14845341,15938947,33.681,,batch_mean(297),5052,70.0,85.2,126.3,380.8,
+mixed_phase7,profile=narrow,seed=20260601;steps=30000;ops=38589,core,38589,21,2,675.60,665.96,682.60,675.71,3.63,0.54,1480173,1501599,26.071,submit,per_op,82797,600.0,1800.0,5000.0,1213700.0,trades=23246;records=26419;active=62
+mixed_phase7,profile=narrow,seed=20260601;steps=30000;ops=38589,core,38589,21,2,675.60,665.96,682.60,675.71,3.63,0.54,1480173,1501599,26.071,cancel,per_op,13134,300.0,500.0,800.0,16900.0,trades=23246;records=26419;active=62
+mixed_phase7,profile=narrow,seed=20260601;steps=30000;ops=38589,core,38589,21,2,675.60,665.96,682.60,675.71,3.63,0.54,1480173,1501599,26.071,modify,per_op,19836,300.0,1000.0,1700.0,66300.0,trades=23246;records=26419;active=62
+mixed_phase7,profile=wide,seed=20260601;steps=30000;ops=38581,core,38581,21,2,735.93,710.12,760.73,736.55,10.24,1.39,1358830,1408220,28.393,submit,per_op,82608,700.0,1800.0,5500.0,898300.0,trades=23313;records=26371;active=117
+mixed_phase7,profile=wide,seed=20260601;steps=30000;ops=38581,core,38581,21,2,735.93,710.12,760.73,736.55,10.24,1.39,1358830,1408220,28.393,cancel,per_op,13341,300.0,600.0,800.0,13500.0,trades=23313;records=26371;active=117
+mixed_phase7,profile=wide,seed=20260601;steps=30000;ops=38581,core,38581,21,2,735.93,710.12,760.73,736.55,10.24,1.39,1358830,1408220,28.393,modify,per_op,19794,300.0,1300.0,1600.0,18400.0,trades=23313;records=26371;active=117
+mixed_phase7,profile=mixed,seed=20260601;steps=30000;ops=38578,core,38578,21,2,704.87,696.66,709.43,704.53,3.33,0.47,1418695,1435418,27.193,submit,per_op,82638,600.0,1800.0,5300.0,1067600.0,trades=23622;records=26381;active=123
+mixed_phase7,profile=mixed,seed=20260601;steps=30000;ops=38578,core,38578,21,2,704.87,696.66,709.43,704.53,3.33,0.47,1418695,1435418,27.193,cancel,per_op,13263,300.0,600.0,700.0,100400.0,trades=23622;records=26381;active=123
+mixed_phase7,profile=mixed,seed=20260601;steps=30000;ops=38578,core,38578,21,2,704.87,696.66,709.43,704.53,3.33,0.47,1418695,1435418,27.193,modify,per_op,19833,300.0,1100.0,1500.0,99400.0,trades=23622;records=26381;active=123
+submit_resting,layer=book,preload=1000;levels=100;ops=20000,scale-active,20000,21,2,292.08,286.95,306.31,293.20,4.14,1.41,3423720,3484867,5.842,,batch_mean(69),870,223.2,397.1,2385.5,7236.2,
+submit_resting,layer=manager,preload=1000;levels=100;ops=20000,scale-active,20000,21,2,603.25,594.82,614.09,603.49,5.59,0.93,1657701,1681181,12.065,,batch_mean(34),1767,455.9,711.8,1517.6,32758.8,
+cancel_random,layer=book,preload=1000;levels=100;ops=500,scale-active,500,21,2,226.60,214.80,240.20,227.10,7.54,3.32,4413063,4655493,0.113,,batch_mean(89),18,246.1,337.1,337.1,337.1,
+cancel_random,layer=manager,preload=1000;levels=100;ops=500,scale-active,500,21,2,257.20,249.20,274.60,258.70,7.77,3.00,3888025,4012841,0.129,,batch_mean(78),21,257.7,293.6,373.1,373.1,
+order_lookup,query=book.find,orders=1000;levels_per_side=100;ops=500000,scale-active,500000,21,2,7.28,7.25,7.80,7.33,0.12,1.68,137434375,137984325,3.638,,batch_mean(2749),546,7.3,7.3,12.2,12.6,
+order_lookup,query=manager.order,orders=1000;levels_per_side=100;ops=500000,scale-active,500000,21,2,20.36,20.03,20.83,20.33,0.23,1.13,49104337,49933090,10.182,,batch_mean(983),1527,19.4,19.7,28.4,102.4,
+market_data,query=bestBid,orders=1000;levels_per_side=100;ops=2000000,scale-active,2000000,21,2,2.75,2.74,2.78,2.75,0.01,0.28,363471149,364690651,5.503,,batch_mean(7270),828,2.7,2.7,3.6,5.4,
+market_data,query=depth(10),orders=1000;levels_per_side=100;ops=50000,scale-active,50000,21,2,311.91,307.12,315.51,311.74,1.83,0.59,3206094,3256099,15.595,,batch_mean(65),2310,313.8,323.1,426.2,650.8,
+submit_resting,layer=book,preload=10000;levels=1000;ops=20000,scale-active,20000,21,2,367.85,359.32,372.27,367.35,3.03,0.82,2718536,2782996,7.357,,batch_mean(55),1092,309.1,525.5,827.3,9014.5,
+submit_resting,layer=manager,preload=10000;levels=1000;ops=20000,scale-active,20000,21,2,804.80,780.42,912.31,814.57,34.40,4.22,1242537,1281361,16.096,,batch_mean(25),2400,672.0,972.0,1480.0,46692.0,
+cancel_random,layer=book,preload=10000;levels=1000;ops=5000,scale-active,5000,21,2,395.02,389.08,461.28,400.29,15.66,3.91,2531517,2570166,1.975,,batch_mean(51),297,388.2,476.5,680.4,980.4,
+cancel_random,layer=manager,preload=10000;levels=1000;ops=5000,scale-active,5000,21,2,481.46,474.42,507.82,484.01,9.35,1.93,2077016,2107837,2.407,,batch_mean(42),360,466.7,521.4,897.6,1302.4,
+order_lookup,query=book.find,orders=10000;levels_per_side=1000;ops=500000,scale-active,500000,21,2,8.55,8.45,9.80,8.64,0.28,3.30,117022024,118388029,4.273,,batch_mean(2341),642,8.8,9.6,15.2,20.9,
+order_lookup,query=manager.order,orders=10000;levels_per_side=1000;ops=500000,scale-active,500000,21,2,28.92,28.38,29.56,28.98,0.28,0.97,34582212,35233599,14.458,,batch_mean(692),2169,28.2,29.5,49.3,73.8,
+market_data,query=bestBid,orders=10000;levels_per_side=1000;ops=2000000,scale-active,2000000,21,2,2.75,2.74,2.80,2.76,0.01,0.49,363015936,364537766,5.509,,batch_mean(7261),828,2.6,2.6,3.6,4.0,
+market_data,query=depth(10),orders=10000;levels_per_side=1000;ops=50000,scale-active,50000,21,2,301.36,298.67,305.69,301.52,1.76,0.58,3318290,3348132,15.068,,batch_mean(67),2241,300.0,309.0,414.9,562.7,
+submit_resting,layer=book,preload=100000;levels=10000;ops=20000,scale-active,20000,21,2,595.92,581.09,608.69,595.05,7.90,1.33,1678078,1720904,11.918,,batch_mean(34),1767,570.6,1197.1,6508.8,55564.7,
+submit_resting,layer=manager,preload=100000;levels=10000;ops=20000,scale-active,20000,21,2,1076.35,985.42,1229.37,1101.85,64.95,5.89,929070,1014791,21.527,,batch_mean(19),3159,1021.1,1505.3,2363.2,4873.7,
+cancel_random,layer=book,preload=100000;levels=10000;ops=20000,scale-active,20000,21,2,912.89,862.72,988.79,914.86,24.06,2.63,1095416,1159125,18.258,,batch_mean(22),2730,900.0,1050.0,1754.5,3459.1,
+cancel_random,layer=manager,preload=100000;levels=10000;ops=20000,scale-active,20000,21,2,1040.02,969.68,1229.29,1048.96,48.75,4.65,961525,1031268,20.800,,batch_mean(20),3000,1030.0,1215.0,1940.0,4360.0,
+order_lookup,query=book.find,orders=100000;levels_per_side=10000;ops=500000,scale-active,500000,21,2,32.28,28.93,33.22,31.89,1.20,3.78,30982198,34570018,16.138,,batch_mean(620),2421,32.6,35.2,60.8,97.3,
+order_lookup,query=manager.order,orders=100000;levels_per_side=10000;ops=500000,scale-active,500000,21,2,67.60,63.59,67.98,66.98,1.23,1.83,14792243,15726732,33.801,,batch_mean(296),5070,70.6,86.1,129.1,465.5,
+market_data,query=bestBid,orders=100000;levels_per_side=10000;ops=2000000,scale-active,2000000,21,2,2.75,2.75,2.79,2.76,0.01,0.40,363180737,364199217,5.507,,batch_mean(7264),828,2.6,2.6,3.5,3.8,
+market_data,query=depth(10),orders=100000;levels_per_side=10000;ops=50000,scale-active,50000,21,2,296.62,293.56,302.08,297.32,2.40,0.81,3371317,3406435,14.831,,batch_mean(68),2208,294.1,302.9,404.4,523.5,
+submit_resting,layer=book,preload=250000;levels=25000;ops=20000,scale-active,20000,21,2,737.20,670.39,830.53,739.04,29.11,3.94,1356484,1491669,14.744,,batch_mean(28),2145,721.4,1050.0,1432.1,3439.3,
+submit_resting,layer=manager,preload=250000;levels=25000;ops=20000,scale-active,20000,21,2,1258.37,1236.92,1499.67,1280.15,65.32,5.10,794682,808460,25.167,,batch_mean(16),3750,1175.0,1606.2,2418.8,3362.5,
+cancel_random,layer=book,preload=250000;levels=25000;ops=20000,scale-active,20000,21,2,1371.05,1188.47,1606.38,1365.34,82.41,6.04,729371,841418,27.421,,batch_mean(16),3750,1375.0,1568.8,2368.8,5087.5,
+cancel_random,layer=manager,preload=250000;levels=25000;ops=20000,scale-active,20000,21,2,1540.54,1492.78,1625.40,1544.34,27.82,1.80,649123,669891,30.811,,batch_mean(16),3750,1512.5,1762.5,2612.5,7531.2,
+order_lookup,query=book.find,orders=250000;levels_per_side=25000;ops=500000,scale-active,500000,21,2,38.71,34.26,39.01,38.42,0.99,2.59,25832584,29188899,19.355,,batch_mean(517),2904,38.5,41.8,70.8,243.5,
+order_lookup,query=manager.order,orders=250000;levels_per_side=25000;ops=500000,scale-active,500000,21,2,85.87,79.93,90.93,86.52,3.11,3.59,11645348,12511636,42.936,,batch_mean(233),6438,88.4,92.3,162.7,537.8,
+market_data,query=bestBid,orders=250000;levels_per_side=25000;ops=2000000,scale-active,2000000,21,2,3.27,3.26,3.32,3.27,0.01,0.45,305838456,306659102,6.539,,batch_mean(6117),981,2.7,2.8,3.9,4.3,
+market_data,query=depth(10),orders=250000;levels_per_side=25000;ops=50000,scale-active,50000,21,2,314.69,308.95,319.04,314.62,2.11,0.67,3177730,3236770,15.735,,batch_mean(64),2346,312.5,321.9,425.0,1018.8,
+submit_resting,layer=book,preload=100000;levels=1;ops=20000,scale-levels,20000,21,2,160.37,158.09,164.02,160.56,1.66,1.03,6235580,6325511,3.207,,batch_mean(125),480,144.0,247.2,308.0,400.0,
+submit_resting,layer=manager,preload=100000;levels=1;ops=20000,scale-levels,20000,21,2,367.57,364.69,374.88,367.90,2.67,0.73,2720533,2742017,7.351,,batch_mean(55),1092,325.5,518.2,796.4,1003.6,
+cancel_random,layer=book,preload=100000;levels=1;ops=20000,scale-levels,20000,21,2,462.84,428.75,495.80,462.68,14.95,3.23,2160574,2332362,9.257,,batch_mean(44),1365,470.5,538.6,902.3,1102.3,
+cancel_random,layer=manager,preload=100000;levels=1;ops=20000,scale-levels,20000,21,2,612.55,558.22,666.47,611.46,19.37,3.17,1632506,1791408,12.251,,batch_mean(33),1821,597.0,672.7,1148.5,2672.7,
+order_lookup,query=book.find,orders=100000;levels_per_side=1;ops=500000,scale-levels,500000,21,2,32.41,28.25,33.38,32.09,1.24,3.87,30852961,35401739,16.206,,batch_mean(618),2430,32.7,35.6,60.4,152.9,
+market_data,query=bestBid,orders=100000;levels_per_side=1;ops=2000000,scale-levels,2000000,21,2,2.75,2.74,2.79,2.76,0.01,0.49,363253297,364471334,5.506,,batch_mean(7266),828,2.6,2.6,3.6,9.4,
+market_data,query=depth(10),orders=100000;levels_per_side=1;ops=50000,scale-levels,50000,21,2,176.73,175.69,178.36,176.87,0.69,0.39,5658285,5691908,8.837,,batch_mean(114),1317,177.2,179.8,242.1,293.0,
+submit_resting,layer=book,preload=100000;levels=10;ops=20000,scale-levels,20000,21,2,204.42,200.49,210.29,204.63,2.04,1.00,4891889,4987780,4.088,,batch_mean(98),615,185.7,328.6,359.2,511.2,
+submit_resting,layer=manager,preload=100000;levels=10;ops=20000,scale-levels,20000,21,2,423.37,418.34,430.61,423.41,2.89,0.68,2362000,2390400,8.467,,batch_mean(48),1251,383.3,602.1,937.5,1145.8,
+cancel_random,layer=book,preload=100000;levels=10;ops=20000,scale-levels,20000,21,2,481.86,428.50,534.07,483.99,19.74,4.08,2075313,2333695,9.637,,batch_mean(42),1431,485.7,540.5,916.7,2045.2,
+cancel_random,layer=manager,preload=100000;levels=10;ops=20000,scale-levels,20000,21,2,621.04,538.32,687.68,621.39,31.41,5.06,1610202,1857631,12.421,,batch_mean(33),1821,618.2,693.9,1109.1,2587.9,
+order_lookup,query=book.find,orders=100000;levels_per_side=10;ops=500000,scale-levels,500000,21,2,32.88,27.60,33.36,32.37,1.61,4.97,30416771,36237398,16.438,,batch_mean(609),2466,32.8,36.0,63.4,150.6,
+market_data,query=bestBid,orders=100000;levels_per_side=10;ops=2000000,scale-levels,2000000,21,2,3.27,3.26,3.29,3.27,0.01,0.18,306049060,306682614,6.535,,batch_mean(6121),981,2.8,2.8,3.1,5.2,
+market_data,query=depth(10),orders=100000;levels_per_side=10;ops=50000,scale-levels,50000,21,2,303.45,301.24,310.60,304.60,2.90,0.95,3295479,3319634,15.172,,batch_mean(66),2274,304.5,316.7,416.7,533.3,
+submit_resting,layer=book,preload=100000;levels=100;ops=20000,scale-levels,20000,21,2,245.25,241.81,309.93,251.25,17.78,7.08,4077389,4135393,4.905,,batch_mean(82),732,224.4,398.8,457.3,642.7,
+submit_resting,layer=manager,preload=100000;levels=100;ops=20000,scale-levels,20000,21,2,497.66,485.57,502.21,497.30,3.47,0.70,2009404,2059435,9.953,,batch_mean(41),1464,453.7,722.0,1131.7,2014.6,
+cancel_random,layer=book,preload=100000;levels=100;ops=20000,scale-levels,20000,21,2,538.95,528.49,606.72,553.91,27.55,4.97,1855477,1892201,10.779,,batch_mean(38),1581,526.3,571.1,989.5,2515.8,
+cancel_random,layer=manager,preload=100000;levels=100;ops=20000,scale-levels,20000,21,2,680.78,604.51,718.64,673.61,28.76,4.27,1468893,1654232,13.616,,batch_mean(30),2001,666.7,776.7,1276.7,1563.3,
+order_lookup,query=book.find,orders=100000;levels_per_side=100;ops=500000,scale-levels,500000,21,2,32.81,29.83,33.58,32.52,1.03,3.17,30476841,33527345,16.406,,batch_mean(610),2460,32.6,35.2,57.9,135.7,
+market_data,query=bestBid,orders=100000;levels_per_side=100;ops=2000000,scale-levels,2000000,21,2,2.75,2.74,2.79,2.75,0.01,0.45,363702491,364843664,5.499,,batch_mean(7275),825,2.6,2.6,3.6,4.5,
+market_data,query=depth(10),orders=100000;levels_per_side=100;ops=50000,scale-levels,50000,21,2,309.10,307.01,312.16,309.30,1.52,0.49,3235157,3257265,15.455,,batch_mean(65),2310,309.2,315.4,418.5,509.2,
+submit_resting,layer=book,preload=100000;levels=1000;ops=20000,scale-levels,20000,21,2,325.35,321.98,329.39,325.59,1.80,0.55,3073660,3105783,6.507,,batch_mean(62),969,306.5,519.4,601.6,785.5,
+submit_resting,layer=manager,preload=100000;levels=1000;ops=20000,scale-levels,20000,21,2,712.85,706.25,725.58,713.22,4.11,0.58,1402820,1415939,14.257,,batch_mean(29),2070,675.9,1027.6,1624.1,3700.0,
+cancel_random,layer=book,preload=100000;levels=1000;ops=20000,scale-levels,20000,21,2,615.62,573.13,687.89,618.04,23.81,3.85,1624379,1744790,12.312,,batch_mean(33),1821,621.2,706.1,1197.0,2909.1,
+cancel_random,layer=manager,preload=100000;levels=1000;ops=20000,scale-levels,20000,21,2,739.83,694.86,823.07,746.66,30.22,4.05,1351662,1439139,14.797,,batch_mean(28),2145,721.4,789.3,1360.7,3982.1,
+order_lookup,query=book.find,orders=100000;levels_per_side=1000;ops=500000,scale-levels,500000,21,2,32.69,27.90,33.59,32.11,1.52,4.74,30590020,35844606,16.345,,batch_mean(612),2451,32.8,35.5,58.8,235.0,
+market_data,query=bestBid,orders=100000;levels_per_side=1000;ops=2000000,scale-levels,2000000,21,2,2.75,2.74,2.78,2.75,0.01,0.35,363570260,364883602,5.501,,batch_mean(7272),828,2.6,2.6,3.5,4.6,
+market_data,query=depth(10),orders=100000;levels_per_side=1000;ops=50000,scale-levels,50000,21,2,305.14,302.69,308.92,305.24,1.51,0.50,3277163,3303666,15.257,,batch_mean(66),2274,306.1,316.7,422.7,557.6,
+submit_resting,layer=book,preload=100000;levels=10000;ops=20000,scale-levels,20000,21,2,583.77,514.92,609.84,582.39,17.01,2.92,1713003,1942030,11.675,,batch_mean(35),1716,560.0,848.6,1082.9,1605.7,
+submit_resting,layer=manager,preload=100000;levels=10000;ops=20000,scale-levels,20000,21,2,1068.79,967.54,1293.82,1078.18,57.39,5.32,935642,1033544,21.376,,batch_mean(19),3159,1010.5,1463.2,2305.3,5621.1,
+cancel_random,layer=book,preload=100000;levels=10000;ops=20000,scale-levels,20000,21,2,908.41,837.96,1271.55,935.28,100.58,10.75,1100825,1193374,18.168,,batch_mean(23),2610,930.4,1034.8,1739.1,6604.3,
+cancel_random,layer=manager,preload=100000;levels=10000;ops=20000,scale-levels,20000,21,2,1058.72,864.10,2611.99,1153.87,344.93,29.89,944537,1157273,21.174,,batch_mean(19),3159,1057.9,1631.6,3105.3,134821.1,
+order_lookup,query=book.find,orders=100000;levels_per_side=10000;ops=500000,scale-levels,500000,21,2,29.12,24.69,69.17,32.44,10.96,33.77,34336886,40503212,14.562,,batch_mean(687),2184,28.5,38.3,61.1,333.3,
+market_data,query=bestBid,orders=100000;levels_per_side=10000;ops=2000000,scale-levels,2000000,21,2,2.75,2.74,2.77,2.75,0.01,0.29,363332486,365056766,5.505,,batch_mean(7267),828,2.6,2.6,3.5,3.9,
+market_data,query=depth(10),orders=100000;levels_per_side=10000;ops=50000,scale-levels,50000,21,2,306.55,303.01,311.04,306.67,2.12,0.69,3262153,3300221,15.327,,batch_mean(66),2274,298.5,310.6,425.8,1856.1,
+submit_resting,layer=book,preload=100000;levels=50000;ops=20000,scale-levels,20000,21,2,929.09,898.70,1082.36,940.16,40.37,4.29,1076322,1112718,18.582,,batch_mean(22),2730,900.0,1195.5,1809.1,4363.6,
+submit_resting,layer=manager,preload=100000;levels=50000;ops=20000,scale-levels,20000,21,2,1443.91,1428.88,2654.20,1545.99,296.46,19.18,692562,699851,28.878,,batch_mean(16),3750,1387.5,1881.2,2750.0,4006.2,
+cancel_random,layer=book,preload=100000;levels=50000;ops=20000,scale-levels,20000,21,2,1297.42,1111.65,2105.76,1388.68,258.39,18.61,770760,899560,25.948,,batch_mean(16),3750,1243.8,1812.5,2668.8,96387.5,
+cancel_random,layer=manager,preload=100000;levels=50000;ops=20000,scale-levels,20000,21,2,1458.62,1155.73,2050.32,1485.45,183.90,12.38,685580,865254,29.172,,batch_mean(16),3750,1462.5,2350.0,5381.2,65706.2,
+order_lookup,query=book.find,orders=100000;levels_per_side=50000;ops=500000,scale-levels,500000,21,2,30.09,27.07,31.11,29.94,0.91,3.04,33228553,36948088,15.047,,batch_mean(665),2256,31.6,36.4,57.9,178.8,
+market_data,query=bestBid,orders=100000;levels_per_side=50000;ops=2000000,scale-levels,2000000,21,2,2.76,2.74,2.81,2.76,0.02,0.71,362838120,364910232,5.512,,batch_mean(7257),828,2.6,2.6,3.6,4.2,
+market_data,query=depth(10),orders=100000;levels_per_side=50000;ops=50000,scale-levels,50000,21,2,300.30,235.67,337.24,299.76,19.14,6.38,3329959,4243257,15.015,,batch_mean(67),2241,222.4,477.6,3528.4,369285.1,
+cancel_in_queue,layer=book;order=oldest-first,queue=100,scale-perlevel,100,21,2,88.00,87.00,131.00,89.95,9.44,10.49,11363636,11494253,0.009,,batch_mean(228),3,90.0,90.0,90.0,90.0,
+cancel_in_queue,layer=book;order=newest-first,queue=100,scale-perlevel,100,21,2,88.00,87.00,89.00,87.81,0.60,0.69,11363636,11494253,0.009,,batch_mean(228),3,88.0,90.0,90.0,90.0,
+cancel_in_queue,layer=manager;order=oldest-first,queue=100,scale-perlevel,100,21,2,105.00,103.00,109.00,105.43,1.43,1.36,9523810,9708738,0.011,,batch_mean(191),3,106.0,106.0,106.0,106.0,
+cancel_in_queue,layer=manager;order=newest-first,queue=100,scale-perlevel,100,21,2,107.00,46.00,517.00,154.48,130.80,84.68,9345794,21739130,0.011,,batch_mean(187),3,148.0,300.0,300.0,300.0,
+cancel_in_queue,layer=book;order=oldest-first,queue=1000,scale-perlevel,1000,21,2,97.50,78.70,1000.40,174.78,248.86,142.39,10256410,12706480,0.098,,batch_mean(206),15,98.1,369.4,369.4,369.4,
+cancel_in_queue,layer=book;order=newest-first,queue=1000,scale-perlevel,1000,21,2,97.70,42.60,518.30,114.66,94.05,82.02,10235415,23474178,0.098,,batch_mean(205),15,95.1,1969.3,1969.3,1969.3,
+cancel_in_queue,layer=manager;order=oldest-first,queue=1000,scale-perlevel,1000,21,2,113.50,50.00,1073.10,209.57,283.10,135.09,8810573,20000000,0.114,,batch_mean(177),18,109.0,140.7,140.7,140.7,
+cancel_in_queue,layer=manager;order=newest-first,queue=1000,scale-perlevel,1000,21,2,118.20,50.80,888.70,163.08,170.43,104.50,8460237,19685039,0.118,,batch_mean(170),18,104.7,702.9,702.9,702.9,
+cancel_in_queue,layer=book;order=oldest-first,queue=10000,scale-perlevel,10000,21,2,94.75,45.13,194.00,107.39,35.43,32.99,10554090,22158210,0.948,,batch_mean(212),144,94.3,122.2,182.5,192.9,
+cancel_in_queue,layer=book;order=newest-first,queue=10000,scale-perlevel,10000,21,2,94.54,80.84,194.78,105.14,27.00,25.68,10577533,12370114,0.945,,batch_mean(212),144,92.0,108.5,120.8,125.0,
+cancel_in_queue,layer=manager;order=oldest-first,queue=10000,scale-perlevel,10000,21,2,114.59,92.42,121.96,113.65,5.74,5.05,8726765,10820169,1.146,,batch_mean(175),174,110.9,135.4,189.7,223.4,
+cancel_in_queue,layer=manager;order=newest-first,queue=10000,scale-perlevel,10000,21,2,111.88,109.47,117.13,112.24,2.19,1.95,8938148,9134923,1.119,,batch_mean(179),168,111.2,124.6,129.6,256.4,
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,scale-perlevel,50000,21,2,98.68,95.53,166.43,102.78,15.59,15.17,10133355,10467916,4.934,,batch_mean(203),741,96.6,151.7,362.6,6495.6,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,scale-perlevel,50000,21,2,95.85,93.94,105.15,96.62,2.58,2.67,10433186,10645319,4.792,,batch_mean(209),720,93.3,105.7,113.4,235.4,
+cancel_in_queue,layer=manager;order=oldest-first,queue=50000,scale-perlevel,50000,21,2,118.21,115.50,128.94,118.81,3.08,2.59,8459521,8657709,5.910,,batch_mean(170),885,114.7,130.0,216.5,427.6,
+cancel_in_queue,layer=manager;order=newest-first,queue=50000,scale-perlevel,50000,21,2,115.18,113.74,120.17,115.59,1.52,1.32,8681912,8791827,5.759,,batch_mean(174),864,113.2,130.5,163.8,231.0,
+match_multi_level,layer=engine,levels=100;per_level=10;trades=1000,scale-perlevel,1000,21,2,380.10,343.10,402.50,379.58,11.77,3.10,2630887,2914602,0.380,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=10;trades=1000,scale-perlevel,1000,21,2,468.20,434.70,487.00,469.43,11.09,2.36,2135839,2300437,0.468,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=100;trades=10000,scale-perlevel,10000,21,2,391.60,358.36,403.47,390.42,8.40,2.15,2553626,2790490,3.916,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=100;trades=10000,scale-perlevel,10000,21,2,507.53,424.04,520.91,505.62,19.79,3.91,1970327,2358268,5.075,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=500;trades=50000,scale-perlevel,50000,21,2,321.44,309.95,326.17,320.80,3.54,1.10,3111020,3226285,16.072,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=500;trades=50000,scale-perlevel,50000,21,2,455.37,435.30,484.63,457.40,11.75,2.57,2196026,2297287,22.768,,,,,,,,
+matching_intensity,cross_pct=0,ops=100000;background=4000,scale-matching,100000,21,2,587.32,557.14,1585.78,705.18,304.76,43.22,1702646,1794875,58.732,,batch_mean(35),8574,420.0,765.7,1145.7,191345.7,trades=0;records=104000;active=104000
+matching_intensity,cross_pct=10,ops=100000;background=4000,scale-matching,100000,21,2,696.62,655.03,901.20,717.61,56.93,7.93,1435505,1526643,69.662,,batch_mean(29),10347,524.1,882.8,1375.9,160679.3,trades=20688;records=104000;active=81247
+matching_intensity,cross_pct=30,ops=100000;background=4000,scale-matching,100000,21,2,799.09,776.79,836.31,801.65,18.69,2.33,1251425,1287353,79.909,,batch_mean(26),11541,607.7,1007.7,1603.8,175703.8,trades=44152;records=104000;active=55652
+matching_intensity,cross_pct=50,ops=100000;background=4000,scale-matching,100000,21,2,802.00,766.65,866.32,799.95,23.26,2.91,1246889,1304371,80.200,,batch_mean(25),12000,616.0,1012.0,1584.0,173020.0,trades=58020;records=104000;active=40670
+matching_intensity,cross_pct=70,ops=100000;background=4000,scale-matching,100000,21,2,871.03,805.21,917.57,866.56,28.24,3.26,1148071,1241917,87.103,,batch_mean(23),13044,626.1,1073.9,1834.8,213987.0,trades=71369;records=104000;active=26478
+matching_intensity,cross_pct=90,ops=100000;background=4000,scale-matching,100000,21,2,851.64,800.84,1026.19,870.76,56.85,6.53,1174204,1248689,85.164,,batch_mean(24),12501,650.0,1050.0,1683.3,203045.8,trades=86249;records=104000;active=10475
+cancel_modify_frequency,cancel_pct=0;modify_pct=0,ops=100000;background=50000,scale-cancelmodify,100000,21,2,598.59,586.99,686.50,602.79,20.38,3.38,1670607,1703595,59.858,,batch_mean(34),8826,505.9,850.0,1205.9,188608.8,trades=0;records=150000;active=150000
+cancel_modify_frequency,cancel_pct=10;modify_pct=0,ops=100000;background=50000,scale-cancelmodify,100000,21,2,643.20,613.04,673.05,644.01,15.24,2.37,1554717,1631220,64.320,,batch_mean(32),9375,534.4,793.8,1128.1,108912.5,trades=0;records=139913;active=129826
+cancel_modify_frequency,cancel_pct=30;modify_pct=0,ops=100000;background=50000,scale-cancelmodify,100000,21,2,754.97,605.81,799.64,750.70,40.77,5.43,1324559,1650688,75.497,,batch_mean(27),11112,303.7,451.9,807.4,118992.6,trades=0;records=119938;active=89876
+cancel_modify_frequency,cancel_pct=50;modify_pct=0,ops=100000;background=50000,scale-cancelmodify,100000,21,2,318.39,296.18,435.79,339.33,42.34,12.48,3140842,3376359,31.839,,batch_mean(63),4764,301.6,423.8,568.3,43471.4,trades=0;records=99781;active=49562
+cancel_modify_frequency,cancel_pct=0;modify_pct=10,ops=100000;background=50000,scale-cancelmodify,100000,21,2,336.34,309.38,493.84,348.47,40.00,11.48,2973173,3232292,33.634,,batch_mean(60),5001,266.7,456.7,656.7,68105.0,trades=0;records=139967;active=139967
+cancel_modify_frequency,cancel_pct=0;modify_pct=30,ops=100000;background=50000,scale-cancelmodify,100000,21,2,367.52,342.76,511.33,394.21,53.57,13.59,2720926,2917493,36.752,,batch_mean(55),5457,323.6,549.1,770.9,93118.2,trades=0;records=119761;active=119761
+cancel_modify_frequency,cancel_pct=0;modify_pct=50,ops=100000;background=50000,scale-cancelmodify,100000,21,2,400.93,366.63,1387.48,458.28,216.52,47.25,2494213,2727553,40.093,,batch_mean(50),6000,352.0,570.0,806.0,94554.0,trades=0;records=100021;active=100021
+cancel_modify_frequency,cancel_pct=20;modify_pct=20,ops=100000;background=50000,scale-cancelmodify,100000,21,2,398.89,366.41,1377.20,470.56,219.94,46.74,2506957,2729213,39.889,,batch_mean(51),5883,372.5,678.4,2482.4,212347.1,trades=0;records=109624;active=89357
+cancel_modify_frequency,cancel_pct=35;modify_pct=35,ops=100000;background=50000,scale-cancelmodify,100000,21,2,337.56,305.68,389.61,341.37,21.57,6.32,2962445,3271395,33.756,,batch_mean(60),5001,315.0,466.7,538.3,5798.3,trades=0;records=80206;active=45239

@@ -2,7 +2,7 @@
 
 An interactive limit order book with a price-time-priority matching engine, written in C++17 with only the standard library. It simulates the core of an exchange matching engine: orders arrive, trade against resting orders at the best price (oldest first), and whatever is left rests in the book. Orders can be cancelled and modified, and every order keeps a complete lifecycle and trade history.
 
-**Status: Phase 6 of 9.** The engine, lifecycle manager and interactive CLI are implemented and tested. Benchmarks (Phase 8) and the final documentation pass (Phase 9) are not done yet, and no performance figures are claimed. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Status: Phase 8 of 9.** The engine, lifecycle manager and interactive CLI are implemented and tested, and a reproducible benchmark suite has measured the baseline (see [docs/BENCHMARKS.md](docs/BENCHMARKS.md); measured on one machine, not a production-readiness claim). The final documentation pass (Phase 9) is not done yet. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Architecture overview
 
@@ -199,4 +199,4 @@ docs/      ARCHITECTURE.md  PROGRESS.md
 - A cancel/replace that runs out of memory part-way can lose the order being modified (it is reported as cancelled with reason "internal failure"); see the architecture document for the exact guarantees.
 - A very long input line is rejected, but it is still read into memory first.
 - Tested with GCC 16.2 only; Clang and MSVC have not been tried.
-- No benchmarks or performance claims yet (Phase 8).
+- Performance figures exist only for one machine and one compiler (see docs/BENCHMARKS.md); they are measurements, not guarantees.

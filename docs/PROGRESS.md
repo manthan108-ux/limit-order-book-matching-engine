@@ -10,7 +10,7 @@
 | 5.1 - Reliability hardening (fault injection) | Complete |
 | 6 - CLI (interactive command line) | Complete |
 | 7 - Comprehensive testing and edge-case validation | Complete |
-| 8 - Benchmarking | Not started |
+| 8 - Benchmarking | Complete (measured baseline; no optimization retained) |
 | 9 - Documentation and finalization | Not started |
 
 ## Phase 1
@@ -108,6 +108,18 @@ That is 2,160 + 9,000 + 24,000 = 35,160 workload steps against the model, plus 4
 
 **Mutation check (scratch copies, not committed):** 14 deliberate production bugs (executing at the incoming price, FIFO broken, aggregate not updated on a fill, each of the three overflow guards removed, a cancel leaving a stale lookup entry, a wrong mid-price, a forgotten cancelled quantity, a trade applied to one side only, a quantity decrease losing priority, no-change accepted, `reduceTo` not adjusting the original quantity, a flipped taker side) were each caught by at least one of ReferenceModelTests, BoundaryTests and SystemInvariantTests. (One batch first showed three "survivors" because my script compiled BoundaryTests without the CLI sources; with that fixed all three were detected.)
 
+## Phase 8 - benchmarking and performance analysis
+
+**Objective:** measure the existing engine reproducibly; optimize only on evidence. Full methodology, data and analysis: [BENCHMARKS.md](BENCHMARKS.md).
+
+- **New, additive:** `benchmarks/` (`lob_bench`, `lob_alloc_profile`, harness and scenarios; no external dependency; not part of CTest), `tests/WorkloadGenerator.h` (the Phase 7 seeded generator, extracted so benchmarks and tests share it), `docs/benchmarks/baseline.csv` and `baseline_alloc.csv`, `docs/BENCHMARKS.md`.
+- **Generator extraction preserved behaviour:** 12 (digest, trades, records) tuples were identical before and after and are now pinned by the new test `SharedGeneratorOutputIsPinnedToKnownDigests` (412 tests in total). `Duel.h` gained three read-only accessors.
+- **Scenarios:** 158 (submit, cancel by position/level/random, three modify kinds, four matching shapes, queries, lookups, Phase 7 mixed streams, and scaling over orders, levels, queue length, matching intensity and cancel/modify frequency), at book, engine and manager layers. All validated outside the timed regions.
+- **Method:** `steady_clock` (100 ns tick, ~185 ns per call), 21 repetitions after 2 warm-ups, median/min/max/cv, thread pinned to a P-core, Release only (a Debug build refuses to run, verified), batch-mean latency percentiles for cheap operations.
+- **Headline baseline (manager layer, 100k resting orders):** resting submit ~843 ns, random cancel ~747 ns, cache-hot cancel ~112-126 ns, price-change modify ~1.19 us, mixed Phase 7 stream ~0.7 us/op.
+- **Optimization:** one candidate (skip the overflow pre-check for non-trading orders) was measured with interleaved A/B runs and **reverted**: resting submit improved 13-17% but the mixed workloads showed no distinguishable end-to-end gain and engine-layer matching got 5-7% slower. **No production code was changed in Phase 8.**
+- **Caveats:** one machine/compiler; hybrid laptop CPU not frequency-locked; absolute numbers depend on run mode (short filtered runs reported lower numbers than full runs for the same binary, cause not determined); batch-mean latency understates single-operation tails.
+
 ## Test results (GCC 16.2.0 / Ninja, `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror`, zero warnings)
 
 Figures are **individual test cases** (each `TEST(...)`), as printed by each suite. Randomized and stress tests run many operations inside one test case; those operation counts are in the Phase 7 section above.
@@ -127,14 +139,14 @@ Figures are **individual test cases** (each `TEST(...)`), as printed by each sui
 | CliRecoveryTests | 11 | existing regression |
 | SystemInvariantTests | 24 | system invariants (auditor meta-tests) |
 | ReferenceModelTests | 20 | reference model |
-| RandomizedWorkloadTests | 11 | randomized |
+| RandomizedWorkloadTests | 12 | randomized (12th test added in Phase 8: pinned generator digests) |
 | BoundaryTests | 44 | boundary |
 | AdversarialTests | 11 | adversarial |
 | SystemFaultTests | 11 | fault injection (system level) |
 | CliEndToEndTests | 16 | CLI end to end |
-| **Total** | **411** | 274 existing + 137 new, in 18 suites |
+| **Total** | **412** | 274 existing + 138 new, in 18 suites |
 
-All 411 pass in the default Release configuration and in every configuration below. Nothing in the 274 existing tests was modified; `TestFramework.h` gained an additive `CHECK_MSG` macro and slow-test timing annotations.
+All 412 pass in the default Release configuration (re-verified in Phase 8). The configuration table below was measured in Phase 7 with 411 tests and was **not** re-run in Phase 8. Nothing in the 274 existing tests was modified; `TestFramework.h` gained an additive `CHECK_MSG` macro and slow-test timing annotations.
 
 ## Compiler, sanitizer and build coverage
 
@@ -181,4 +193,4 @@ All configurations use `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-co
 - **The CLI end-to-end suite cannot produce stale history** in the real executable (it needs simulated memory exhaustion); recovery behaviour is covered in-process by `CliRecoveryTests` and, through the `recover` command on a healthy session, end to end.
 - **Randomized workloads are bounded:** the largest is 6,000 steps per seed, kept small enough for routine runs (about 10 s of the 18 s Release total, 36 s of the 55 s Debug total).
 - History is never pruned; orders are limit orders only; prices are whole ticks; execution timestamps are the taker's sequence. Tested with GCC only.
-- `benchmarks/` is empty. No benchmark numbers exist, and no performance claim is made.
+- Performance numbers (see BENCHMARKS.md) come from one machine and one compiler and are measured performance, not a production-readiness claim. Benchmarks are not run by CTest.
