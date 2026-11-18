@@ -51,6 +51,21 @@ public:
     long allocations() const { return state().count; }
 };
 
+// Temporarily disarms the injector (allocations are neither counted nor failed) and
+// restores the previous state on destruction. Used by test streams, so that writing a
+// message to a test buffer is not itself subject to the memory exhaustion being
+// simulated for the code under test.
+class Pause {
+public:
+    Pause() : wasArmed_(state().armed) { state().armed = false; }
+    ~Pause() { state().armed = wasArmed_; }
+    Pause(const Pause&) = delete;
+    Pause& operator=(const Pause&) = delete;
+
+private:
+    bool wasArmed_;
+};
+
 // Called from operator new; returns true if this allocation must fail.
 inline bool shouldFail() {
     State& s = state();

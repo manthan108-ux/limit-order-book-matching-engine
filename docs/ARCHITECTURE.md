@@ -1,11 +1,11 @@
 # Architecture
 
-> Status: Phases 1-5 implemented. Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
+> Status: Phases 1-6 implemented (5.1 hardening included). Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
 
 ## Layering
 
 ```
-CLI (src/main.cpp)            parsing + printing only, no business logic   (Phase 6)
+CLI (Cli) + CommandParser      parsing + printing only, no business logic   (Phase 6, done)
         |
 OrderManager                  id policy, lifecycle history, cancel / modify (Phase 5, done)
         |
@@ -378,6 +378,59 @@ Every `OrderRecord` and every trade is kept for the lifetime of the `OrderManage
 | `checkConsistency` | O(N + T) average | test/debug use |
 
 Hash operations are *average* O(1) (O(N) worst case on a pathological hash). Ordered-map steps are O(log P). None of this is a latency measurement: Phase 8 will measure, and no performance claim is made here.
+
+## Command line interface (implemented, Phase 6: `CommandParser`, `Cli`, `main.cpp`)
+
+```mermaid
+flowchart TD
+    IN["stdin line"] --> HL["Cli::handleLine"]
+    HL --> PC["parseCommand (CommandParser)<br/>tokenize, strict numbers, arity, case-insensitive"]
+    PC -- "syntax error" --> ERR["stderr: error: ..."]
+    PC -- "ParsedCommand" --> EX["Cli::execute / dispatch"]
+    EX --> OM["OrderManager<br/>submit / cancel / modify / order / tradesFor / recover"]
+    EX --> BK["OrderManager::book() (const)<br/>depth / bestBid / bestAsk / spread / midPrice"]
+    OM --> OUT["stdout: tables and messages"]
+    BK --> OUT
+    EX -- "exception from a trading command" --> FAIL["stderr: may have executed, do NOT resubmit; run recover"]
+    EX -- "exit / quit / EOF" --> END["clean exit, code 0"]
+```
+
+### Layers and files
+
+| File | Role | Depends on |
+|---|---|---|
+| `include/CommandParser.h`, `src/CommandParser.cpp` | Pure parsing: tokenize a line, validate syntax and numbers, produce a `ParsedCommand` or an error string. No I/O, no OrderManager. | `OrderTypes.h` only |
+| `include/Cli.h`, `src/Cli.cpp` | Dispatch and formatting. Calls `OrderManager`, prints results. | `CommandParser`, `OrderManager` |
+| `src/main.cpp` | Wires `std::cin` / `std::cout` / `std::cerr` and `--quiet` / `--help` to a `Cli`. | `Cli` |
+
+CMake builds the parser and CLI into a separate static library `lob_ui`, which links `lob_core`. The core never depends on it, and the core sources are compiled once. The `lob_cli` executable and all tests link the libraries instead of recompiling sources.
+
+### What the CLI does not do
+- It holds **no order state**: it prints only what `OrderManager` returns (reports, lifecycle records, `tradesFor`) or what the book reports through `OrderManager::book()`.
+- It never touches containers (the book display uses `OrderBook::depth()` and the best-price queries, not the maps), never matches, never creates or removes resting orders, and never re-implements lifecycle rules. Modification priority ("preserved" / "reset") is derived by comparing the manager's own `sequence` before and after, not by a CLI rule.
+- It invents no id mechanism: a missing `ID` means `OrderManager::submit(side, price, quantity)` generates one.
+
+### Input handling
+- Tokens are split on runs of spaces/tabs; leading and trailing whitespace and `\r` are ignored. Command words and `BUY`/`SELL` are case-insensitive.
+- Numbers are parsed with `std::from_chars` as whole tokens: no `atoi`, no locale, no exceptions. A token must be entirely a plain decimal integer (optional leading `-`). `+5`, `1e3`, `0x10`, `100abc` and `1,000` are invalid; `10.5` is reported as "not a whole number: never rounded"; a value that does not fit 64 bits is "out of range" (never wrapped or truncated); an out-of-range numeric prefix followed by junk is "invalid".
+- Prices and quantities must be positive and ids non-zero; the parser uses the shared `isValidPrice` / `isValidQuantity` helpers from `OrderTypes.h` and refuses other values with a specific message. Such input never reaches the manager, so it consumes no order id. `modify ... 0` says to use `cancel`. Everything that is a business decision (duplicate id, unknown order, not active, no change, crossing) is left to the manager and shown as a result.
+- `depth` accepts 1 to 1000 (`kMaxDepthLevels`).
+- A line longer than 1024 characters (`kMaxLineLength`) is rejected without being parsed. `std::getline` still reads the whole line first, which is a known limitation.
+- Syntax errors go to `stderr` and the session continues. Business rejections are normal results on `stdout`. EOF exits cleanly like `exit`. `Cli::handleLine` / `execute` / `run` never throw.
+
+### Output
+Plain text with fixed-width columns; no ANSI colours, no terminal-size or capability assumptions, so it reads the same in a Windows console, a Unix terminal or a pipe. Prices are labelled "ticks" and quantities "units". The book lists asks lowest first and bids highest first. The mid-price is shown exactly as `ticks` plus `.5` when the sum is odd; no floating point is used.
+
+### Recovery integration (Phase 5.1)
+- `order` and `trades` call `OrderManager::isHistoryCurrent()`. While it is false they print a `WARNING`, state that recovery is pending, and label the output "possibly out of date". The book commands (`book`, `depth`, `best`) read the book directly, which is always valid, and carry no such caveat.
+- A trading command that completes while bookkeeping is still pending ends with a note saying so. `modify` shows its "before" values as unavailable when it cannot trust the record.
+- `recover` calls `OrderManager::recover()` exactly once, and reports "Recovery complete", "already current", or "Recovery incomplete ... run 'recover' again". It is allocation-free in the CLI (literals only), so it still reports correctly while memory is exhausted. The CLI contains no recovery logic of its own.
+- If a trading command throws (for example `std::bad_alloc`), the CLI reports that it may already have executed and must not be resubmitted, and points the user to `recover`, `book` and `order <ID>`. The CLI never retries or resubmits anything. Because `OrderManager` retires ids, a deliberate resubmission of the same id is refused as a duplicate.
+
+### Testing the CLI
+- `CommandParserTests` tests parsing in isolation (no terminal, no manager).
+- `CliTests` drives the real `Cli` and `OrderManager` through in-memory streams and asserts on manager state and facts in the output rather than column layout, and runs the manager's consistency audit after operations.
+- `CliRecoveryTests` is its own executable using the same isolated, deterministic `operator new` replacement as `FaultInjectionTests` to create genuinely stale history. Its output streams are exempt from the injected failures (`fault::Pause`), so the CLI's messages can be captured while memory is "exhausted". It covers stale warnings, successful recovery, incomplete recovery, retry, and failed trading commands.
 
 ## Data structure summary
 

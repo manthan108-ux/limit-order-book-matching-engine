@@ -41,8 +41,16 @@ target_include_directories(lob_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(lob_core PUBLIC cxx_std_17)
 target_link_libraries(lob_core PRIVATE lob_warnings)
 
+# Terminal layer: command parsing and the CLI. Depends on lob_core, never the reverse.
+add_library(lob_ui STATIC
+  src/CommandParser.cpp
+  src/Cli.cpp
+)
+target_include_directories(lob_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(lob_ui PUBLIC lob_core PRIVATE lob_warnings)
+
 add_executable(lob_cli src/main.cpp)
-target_link_libraries(lob_cli PRIVATE lob_core lob_warnings)
+target_link_libraries(lob_cli PRIVATE lob_ui lob_core lob_warnings)
 
 if(LOB_BUILD_TESTS)
   enable_testing()

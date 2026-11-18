@@ -8,7 +8,7 @@
 | 4 - Matching engine and trade generation | Complete |
 | 5 - Order lifecycle management (OrderManager) | Complete |
 | 5.1 - Reliability hardening (fault injection) | Complete |
-| 6 - CLI | Not started |
+| 6 - CLI (interactive command line) | Complete |
 | 7 - Testing and reliability | Not started |
 | 8 - Benchmarking | Not started |
 | 9 - Documentation and finalization | Not started |
@@ -50,6 +50,19 @@ Audit of the Phase 5 exception-safety limitations, driven by a deterministic all
 
 **Not changed (by decision):** history is retained for the manager's lifetime and there is no pruning API; `order()` returns a copy; `NoChange` and zero-quantity modify are rejections; priority rules are as before. These contracts are now documented in ARCHITECTURE.md.
 
+## Phase 6 - command line interface
+
+The interactive terminal application (see [ARCHITECTURE.md](ARCHITECTURE.md), "Command line interface", and the README for usage).
+
+- **`CommandParser`** (pure, no I/O): tokenizes a line and validates syntax and numbers with `std::from_chars` (strict whole tokens; no rounding, truncation or wrap-around; decimals, `+5`, `1e3`, trailing junk and out-of-range values are rejected with specific messages). Case-insensitive commands and sides, whitespace-tolerant, line length limit 1024, depth limit 1000.
+- **`Cli`**: dispatches parsed commands to `OrderManager` and prints results as plain fixed-width tables (no ANSI, no terminal assumptions). It holds no order state, never touches book containers, never matches, and never duplicates lifecycle rules. It never throws; `run()` ends cleanly on `exit`, `quit` or end of input.
+- **Commands**: `submit`, `cancel`, `modify`, `book`, `depth`, `best`, `order`, `trades`, `recover`, `help`, `exit`, `quit`.
+- **Phase 5.1 integration**: `order` and `trades` warn and label their output "possibly out of date" while `isHistoryCurrent()` is false; `recover` calls `OrderManager::recover()` once and reports complete / already current / incomplete (retryable); a trading command that throws is reported as "may already have executed, do NOT resubmit, run recover", and the CLI never retries anything.
+- **Build**: a new static library `lob_ui` (parser + CLI) links `lob_core`; `lob_cli` and the tests link the libraries, so no source is compiled twice. `FaultInjection.h` gained a `Pause` guard (test-only) used by the recovery tests.
+- **No Phase 1-5.1 source file was modified.** (Only the CMake lists and `tests/FaultInjection.h` were extended.)
+
+**Tests** (75 new): `CommandParserTests` (27) parses every command and rejects every malformed form, including overflow, decimals, `+`, exponent, whitespace, case, extreme values and a 5000-character token; `CliTests` (37) drive the real CLI and manager through in-memory streams (submit with generated/client/duplicate ids, crossing and partial fills, cancel incl. partial, modify priority semantics, book/depth/best including empty and one-sided books and the half-tick mid-price, `order`/`trades` for resting/filled/cancelled/rejected orders, help, `exit`/`quit`/EOF, malformed input not ending the session, CRLF, prompt on/off) and audit the manager after operations; `CliRecoveryTests` (11, own executable with the isolated fault-injection `operator new`) creates genuinely stale history (4 distinct stale states, including part-way ones) and covers stale warnings, successful recovery with no duplicate trade associations, incomplete recovery under still-exhausted memory, retry, idempotence, no re-execution, auto-healing by a mutating command, and failed `submit`/`modify` being reported and not retried. I also confirmed the tests catch bugs: scratch copies of the CLI/parser with no stale warning, a fake `recover`, truncated decimals, accepted zero price, wrapped overflow, inverted priority message, reversed ask order and a wrong cancelled quantity each fail the relevant suite (not committed).
+
 ## Test results (clean build, GCC 16.2 / Ninja, `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror`, zero warnings)
 
 | Suite | Tests |
@@ -62,9 +75,12 @@ Audit of the Phase 5 exception-safety limitations, driven by a deterministic all
 | MatchingEngineTests | 34 |
 | OrderManagerTests | 41 |
 | FaultInjectionTests | 20 |
-| **Total** | **199** (179 before Phase 5.1 + 20 new) |
+| CommandParserTests | 27 |
+| CliTests | 37 |
+| CliRecoveryTests | 11 |
+| **Total** | **274** (199 before Phase 6 + 75 new) |
 
-All 199 pass in the default Release configuration (`-O3`) and in a separate Debug configuration (`-O0`, libstdc++ assertions), both with warnings as errors.
+All 274 pass in the default Release configuration (`-O3`) and in a separate Debug configuration (`-O0`, libstdc++ assertions), both with warnings as errors.
 
 ## Compiler coverage
 
@@ -84,5 +100,7 @@ All 199 pass in the default Release configuration (`-O3`) and in a separate Debu
 - Orders are limit orders only; execution timestamps are the taker's `sequence` (no wall clock); a cross between resting orders added directly to an `OrderBook` is not uncrossed.
 - Cancel and execution costs are O(log P) + average O(1) per order, not O(1).
 - Only GCC has been tried (see Compiler coverage).
-- The CLI is still a placeholder (Phase 6).
+- The CLI reads a whole input line before checking its length (a very long line is rejected but still buffered).
 - `benchmarks/` is empty. No benchmark numbers exist yet, and no performance claim is made.
+- CLI syntax limits: `modify` always takes both a price and a remaining quantity (the manager also supports changing only one); prices are whole ticks only (no decimal prices or tick-size conversion); there is no command history, line editing or script file option (use shell redirection); a generated id cannot be shown if a `submit` fails with an exception.
+- CLI tests cover stale-history behaviour by simulating allocation failure (the only way to produce it). The CLI formatting itself is not pinned by exact-layout tests, by design.

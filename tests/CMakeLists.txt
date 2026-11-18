@@ -10,11 +10,14 @@ set(LOB_TEST_SOURCES
   MatchingEngineTests.cpp
   OrderManagerTests.cpp
   FaultInjectionTests.cpp
+  CommandParserTests.cpp
+  CliTests.cpp
+  CliRecoveryTests.cpp
 )
 
 foreach(src ${LOB_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
   add_executable(${name} ${src})
-  target_link_libraries(${name} PRIVATE lob_core lob_warnings)
+  target_link_libraries(${name} PRIVATE lob_ui lob_core lob_warnings)
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
