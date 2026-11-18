@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: Phases 1-6 implemented (5.1 hardening included). Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
+> Status: Phases 1-6 implemented (5.1 hardening and the Phase 7 validation layer included). Sections marked *(planned)* describe code that does not exist yet; see [PROGRESS.md](PROGRESS.md).
 
 ## Layering
 
@@ -103,7 +103,7 @@ flowchart LR
 ### Policies
 - **Id reuse:** ids are unique among *resting* orders. Once an order is cancelled its id can be added again (a test covers this). The OrderManager (Phase 5) remembers retired ids; the book does not.
 - **Sequence:** callers submit non-decreasing `sequence` values in arrival order. FIFO position is insertion order, and the invariant checker verifies it agrees with `sequence`. The book does not itself reject out-of-order sequences.
-- **Rejections from `add`:** `DuplicateOrderId`, `OrderNotActive`, `InvalidQuantity` (no remaining quantity). Price, id and quantity validity is already guaranteed by `Order::create`. A rejected add leaves the book unchanged.
+- **Rejections from `add`:** `DuplicateOrderId`, `OrderNotActive`, `InvalidQuantity` (no remaining quantity), `QuantityOverflow` (resting it would overflow its level's total quantity, see the engine section). Price, id and quantity validity is already guaranteed by `Order::create`. A rejected add leaves the book unchanged.
 - **`cancel(id)`:** returns the removed order marked CANCELLED, or `std::nullopt` for an unknown id. That includes a repeated cancel, because the entry is gone.
 
 ### Market data
@@ -178,6 +178,13 @@ flowchart TD
 
 ### Execution price
 Every trade executes at the **maker's (resting) price**, so an aggressive order gets price improvement. A buy at 110 against a sell at 105 trades at 105, and a sell at 95 against a bid at 100 trades at 100. The remainder of an incoming order rests at its own limit price, not at a trade price.
+
+### Quantity overflow guard (Phase 7)
+A price level keeps its aggregate quantity in a signed 64-bit integer. Before Phase 7 nothing bounded that sum, so two orders of `INT64_MAX` at the same price were both accepted and the level total wrapped negative (undefined behaviour). The rule now, enforced in three layers:
+- **`MatchingEngine::submit` / `replace`** check *before any mutation* whether the order, resting in the worst case (its whole quantity), would overflow its own side's level at its price. If so the order is rejected with `RejectReason::QuantityOverflow`: no trade has executed and the book is untouched. The check is deliberately conservative: it assumes the whole quantity could rest, so an order that would in fact have matched completely is also refused if its own side's level at that price is within its quantity of `INT64_MAX`. For a replacement, the order's own old quantity is not counted when it stays in the same level.
+- **`OrderBook::add`** independently returns `QuantityOverflow` (book unchanged).
+- **`PriceLevel::add`** throws `std::invalid_argument` (level unchanged) as a precondition guard.
+At the manager, a submission rejected this way is recorded as REJECTED (the id is retired, and it has consumed a sequence number); a modification rejected this way leaves the order untouched (and also consumes a sequence number, since sequence allocation precedes the engine call). Orders whose combined quantity is exactly `INT64_MAX` are accepted.
 
 ### Fills
 `quantity = min(taker remaining, maker remaining)`. Each execution produces its own `Trade`, so one order sweeping K resting orders yields K trades. A maker fully consumed is removed. A maker partially consumed stays with the reduced quantity as PARTIALLY_FILLED.
@@ -341,7 +348,7 @@ Every allocation an operation makes was failed, one at a time, by `tests/FaultIn
 
 ### Remaining failure scenarios the tests cannot reach
 
-- Allocation failures inside the standard library that do not go through `operator new`, and failures on `std::terminate` paths.
+- Allocation failures inside the standard library that do not go through `operator new`, and failures on `std::terminate` paths. **Concretely (found in Phase 7):** `FaultInjectionTests` and `CliRecoveryTests` link the shared `libstdc++` DLL, where `std::string` (an extern template) allocates inside the DLL through the DLL's own `operator new`, bypassing the injected replacement. Production code builds strings only on error paths (exception messages, `toString` in reports), never on the operation paths whose allocations are swept, so the Phase 5.1 conclusions stand. `SystemFaultTests` is linked statically, so *every* allocation there, including the library's, is injectable and counted.
 - Exhaustion of non-heap resources (stack, handles).
 - A failure inside `checkConsistency()` or `checkInvariants()` themselves; these are diagnostics and not part of any guarantee.
 - Only `std::bad_alloc` is injected. A hard crash or power loss is not modelled (no persistence exists).
@@ -431,6 +438,39 @@ Plain text with fixed-width columns; no ANSI colours, no terminal-size or capabi
 - `CommandParserTests` tests parsing in isolation (no terminal, no manager).
 - `CliTests` drives the real `Cli` and `OrderManager` through in-memory streams and asserts on manager state and facts in the output rather than column layout, and runs the manager's consistency audit after operations.
 - `CliRecoveryTests` is its own executable using the same isolated, deterministic `operator new` replacement as `FaultInjectionTests` to create genuinely stale history. Its output streams are exempt from the injected failures (`fault::Pause`), so the CLI's messages can be captured while memory is "exhausted". It covers stale warnings, successful recovery, incomplete recovery, retry, and failed trading commands.
+
+## Validation architecture (Phase 7)
+
+Phase 7 adds a validation layer around the existing code. It is entirely test-side (`tests/`); the only production change is the overflow fix above. Three reusable pieces, plus suites that combine them:
+
+```mermaid
+flowchart LR
+    subgraph prod["Production (unchanged API)"]
+        OM["OrderManager"] --> ME["MatchingEngine"] --> OB["OrderBook"]
+    end
+    subgraph test["Test-only"]
+        REF["ReferenceExchange<br/>independent model"]
+        AUD["SystemAuditor<br/>public-API snapshot + invariants"]
+        DU["Duel<br/>same ops to both, compare"]
+    end
+    DU --> OM
+    DU --> REF
+    DU --> AUD
+    AUD -. "reads only the public API" .-> OM
+```
+
+- **`tests/ReferenceExchange.h`: independent reference model.** A flat map of orders scanned linearly: the best resting order is found by comparing (price, arrival stamp) across every order, book levels and the mid-price are derived on demand (mid-price from unsigned 64-bit sums), and nothing from `MatchingEngine`, `OrderBook`, `PriceLevel` or `OrderManager` is called. It models the documented behaviour: id policy, validation order, execution at the resting price, FIFO by arrival, the modification priority rules, terminal states, id and level-overflow limits. `ReferenceModelTests` first checks the model against hand-computed answers, so it is an oracle and not a mirror.
+- **`tests/SystemAuditor.h`: system-level invariants.** It looks at an `OrderManager` only through its public API, copies what it sees into a plain-data `Snapshot`, and checks the invariants on that data. Codes: **A** lifecycle<->book (every active record rests exactly once with identical terms; every resting order has an active record; terminal orders are not in the book; no id rests twice; the tracked id set is complete), **B** quantity reconciliation (`executed + remaining + cancelled = effective`, never negative, status coherent with quantities, executed never decreases), **C** trades (valid, buyer != seller, unique increasing ids, each trade on its buyer and seller exactly once in order, per-order executed quantity equals the sum of its trades, totals reconcile using a 128-bit sum), **D** matching (the book is never crossed), **E** book integrity (strict ordering, levels non-empty, aggregates, FIFO by sequence, best prices, spread, exact mid-price, depth), **F** stale history (checks are relaxed exactly as far as an in-order *prefix* of applied trades allows, and production's `checkConsistency()` must report exactly the stale notice), **T** transitions between consecutive snapshots (immutable fields, terminal orders frozen, legal state moves, the trade list only grows). Because it works on plain data, `SystemInvariantTests` corrupts snapshots and proves each class is detected.
+- **`tests/Duel.h`: production vs model.** Every operation goes to both; the report, the touched orders (and their counterparties), the whole book, the trade counts and (on a schedule) the full audit are compared. On the first mismatch it prints the label, seed, operation number, the operation, and expected vs actual, then stops.
+- **`tests/TestRng.h`:** `splitmix64`, fully specified, so a seed produces the same sequence on every compiler and platform.
+
+Suites built on them: `RandomizedWorkloadTests` (deterministic workloads, incl. the CLI driven by random text), `BoundaryTests`, `AdversarialTests`, `SystemFaultTests` (system invariants under injected failures, with allocation accounting) and `CliEndToEndTests` (the real executable as a subprocess). See [PROGRESS.md](PROGRESS.md) for counts, seeds and results.
+
+### What the auditor cannot observe (no production API was added for tests)
+- The manager cannot enumerate its records, so the caller passes the ids it submitted; the audit verifies that set is complete (`recordedOrderCount()`), but it cannot discover an id the caller never tracked.
+- The internal id->handle lookup and the price-level list internals are only observable through `OrderBook::checkInvariants()` (which the auditor runs and cross-checks), not directly.
+- Failure branches of `checkInvariants()` / `checkConsistency()` cannot be reached through the public API (they need a corrupt state), so those messages have no committed test; the auditor itself is separately proven by corrupting its own snapshots.
+- Sequence-number exhaustion (2^64 events) is not reachable and has no test.
 
 ## Data structure summary
 

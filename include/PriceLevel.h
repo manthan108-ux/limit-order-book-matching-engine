@@ -55,7 +55,8 @@ public:
 
     // Appends at the back (lowest time priority) and returns a stable handle.
     // Throws std::invalid_argument if the order's price differs from the
-    // level's, or the order is not active / has no remaining quantity.
+    // level's, the order is not active / has no remaining quantity, or adding it
+    // would overflow the level's total quantity (nothing changes in any of these cases).
     OrderHandle add(Order order);
 
     // Removes and returns the order referred to by `handle`, from anywhere in

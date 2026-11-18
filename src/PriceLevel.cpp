@@ -1,6 +1,7 @@
 #include "PriceLevel.h"
 
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -25,6 +26,10 @@ PriceLevel::OrderHandle PriceLevel::add(Order order) {
         throw std::invalid_argument("only active orders with remaining quantity can rest");
     }
     const Quantity remaining = order.remainingQuantity();
+    // The aggregate is a signed 64-bit sum; refuse (before any change) rather than overflow it.
+    if (remaining > std::numeric_limits<Quantity>::max() - totalQuantity_) {
+        throw std::invalid_argument("adding the order would overflow the level's total quantity");
+    }
     orders_.push_back(std::move(order));  // strong guarantee: throws before any change
     totalQuantity_ += remaining;
     return std::prev(orders_.cend());

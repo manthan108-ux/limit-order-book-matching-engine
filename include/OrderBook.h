@@ -89,6 +89,7 @@ public:
     //   DuplicateOrderId  an order with this id is already resting (either side)
     //   OrderNotActive    the order is filled / cancelled / rejected
     //   InvalidQuantity   the order has no remaining quantity
+    //   QuantityOverflow  resting it would overflow its price level's total quantity
     // Strong exception guarantee (if allocation throws, nothing was added).
     RejectReason add(Order order);
 

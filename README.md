@@ -177,7 +177,9 @@ The order manager can finish a trade but fail to allocate while updating its his
 ctest --test-dir build --output-on-failure
 ```
 
-Each suite is a separate executable in `build/tests/` and can be run directly. The suites cover the domain types, price levels, the order book (with invariant checks), the matching engine, the order manager, deterministic allocation-failure injection, the command parser, the CLI end to end, and CLI recovery. The stress tests compare the engine against independent naive reference models. Test counts per suite are in [docs/PROGRESS.md](docs/PROGRESS.md).
+Each suite is a separate executable in `build/tests/` and can be run directly (`CliEndToEndTests` takes the path of `lob_cli` as its first argument; CTest supplies it). The suites cover the domain types, price levels, the order book (with invariant checks), the matching engine, the order manager, deterministic allocation-failure injection, the command parser, the CLI, and CLI recovery.
+
+Phase 7 added a validation layer: an **independent reference model** of matching and the order lifecycle, a **system-level invariant auditor** that reads only the public API, deterministic **randomized workloads** (fixed seeds, results compared with the model after every operation), boundary and adversarial sequences, **system-level fault injection** with allocation accounting, and **end-to-end tests of the real `lob_cli` executable**. It found and fixed one real defect (a price level's total quantity could overflow with orders near `INT64_MAX`). These results show that the code behaves correctly on everything exercised; they are not a proof of correctness or of production readiness, and the known gaps are listed in [docs/PROGRESS.md](docs/PROGRESS.md). Test counts per suite are there too.
 
 ## Project layout
 

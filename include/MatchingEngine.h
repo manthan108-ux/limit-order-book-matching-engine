@@ -99,6 +99,12 @@ private:
     // Throws std::overflow_error, changing nothing, if `incoming` could not be
     // numbered in full.
     void ensureTradeIds(const Order& incoming) const;
+    // True if resting `quantity` at (side, price) could overflow that level's total quantity.
+    // Deliberately conservative: it assumes the whole quantity rests (a remainder can only
+    // be smaller). `alreadyCounted` is quantity of the same order that is about to leave
+    // that level. Checked BEFORE any mutation, so an order is never half-executed and then
+    // unable to rest.
+    bool restingWouldOverflow(Side side, Price price, Quantity quantity, Quantity alreadyCounted) const;
     // Match + rest `incoming`, which must not be in the book.
     ExecutionReport execute(Order incoming, Operation operation);
 

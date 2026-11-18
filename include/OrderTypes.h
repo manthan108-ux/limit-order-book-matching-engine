@@ -45,7 +45,8 @@ enum class RejectReason : std::uint8_t {
     NoChange,         // modify request changes nothing
     InvalidSide,      // side is not BUY or SELL
     IdSpaceExhausted, // no order id / sequence number left to assign
-    TradeIdsExhausted // the engine cannot number the trades this order would need
+    TradeIdsExhausted, // the engine cannot number the trades this order would need
+    QuantityOverflow   // resting the order would overflow its price level's total quantity
 };
 
 // Why an order left the book as CANCELLED.
@@ -137,6 +138,7 @@ inline std::string toString(RejectReason r) {
         case RejectReason::InvalidSide:      return "invalid side (must be BUY or SELL)";
         case RejectReason::IdSpaceExhausted: return "identifier space exhausted";
         case RejectReason::TradeIdsExhausted: return "trade id space exhausted";
+        case RejectReason::QuantityOverflow:  return "quantity too large: it would overflow the price level's total quantity";
     }
     return "unknown";
 }

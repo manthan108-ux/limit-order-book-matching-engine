@@ -1,5 +1,6 @@
 #include "OrderBook.h"
 
+#include <limits>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
@@ -38,9 +39,16 @@ RejectReason OrderBook::addTo(Map& side, Order order) {
     const Side which = order.side();
     const Price price = order.price();
 
+    auto levelIt = side.find(price);
+    // A level's total is a signed 64-bit sum: refuse, before changing anything, an order
+    // that would overflow it (quantities near INT64_MAX at one price).
+    if (levelIt != side.end() &&
+        levelIt->second.totalQuantity() > std::numeric_limits<Quantity>::max() - order.remainingQuantity()) {
+        return RejectReason::QuantityOverflow;
+    }
+
     // Level is created first so that nothing below can leave an empty level
     // behind: any failure after this point rolls the insertion back.
-    auto levelIt = side.find(price);
     if (levelIt == side.end()) levelIt = side.emplace(price, PriceLevel(price)).first;
 
     try {

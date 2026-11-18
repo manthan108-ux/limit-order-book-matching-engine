@@ -82,6 +82,20 @@ ExecutionReport MatchingEngine::submit(OrderId id, Side side, Price price,
     return submit(*Order::create(id, side, OrderType::Limit, price, quantity, sequence));
 }
 
+bool MatchingEngine::restingWouldOverflow(Side side, Price price, Quantity quantity,
+                                          Quantity alreadyCounted) const {
+    Quantity levelTotal = 0;
+    if (side == Side::Buy) {
+        const auto it = book_.bids().find(price);
+        if (it != book_.bids().end()) levelTotal = it->second.totalQuantity();
+    } else {
+        const auto it = book_.asks().find(price);
+        if (it != book_.asks().end()) levelTotal = it->second.totalQuantity();
+    }
+    levelTotal -= alreadyCounted;  // never negative: it is part of that total
+    return levelTotal > std::numeric_limits<Quantity>::max() - quantity;
+}
+
 void MatchingEngine::ensureTradeIds(const Order& incoming) const {
     // Fast path: enough ids for even one trade per resting order. Otherwise
     // count exactly, since ids this scarce are an extreme corner case.
@@ -108,6 +122,9 @@ ExecutionReport MatchingEngine::submit(Order incoming) {
     if (incoming.remainingQuantity() <= 0) {
         return rejection(Operation::Add, id, original, RejectReason::InvalidQuantity);
     }
+    if (restingWouldOverflow(incoming.side(), incoming.price(), incoming.remainingQuantity(), 0)) {
+        return rejection(Operation::Add, id, original, RejectReason::QuantityOverflow);
+    }
     ensureTradeIds(incoming);  // fail before any mutation
     return execute(std::move(incoming), Operation::Add);
 }
@@ -124,6 +141,12 @@ ExecutionReport MatchingEngine::replace(OrderId id, Price newPrice, Quantity new
     }
     if (newRemaining > std::numeric_limits<Quantity>::max() - current->executedQuantity()) {
         return rejection(Operation::Modify, id, newRemaining, RejectReason::InvalidQuantity);
+    }
+    // Its own quantity leaves the old level when it is replaced, so it only counts against
+    // the new level if that is the same level.
+    if (restingWouldOverflow(current->side(), newPrice, newRemaining,
+                             current->price() == newPrice ? current->remainingQuantity() : 0)) {
+        return rejection(Operation::Modify, id, newRemaining, RejectReason::QuantityOverflow);
     }
     // Everything that can fail logically is checked while the order is still
     // safely resting; only then is it taken out.

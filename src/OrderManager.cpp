@@ -246,7 +246,7 @@ ExecutionReport OrderManager::process(OrderId id, Side side, Price price, Quanti
         throw;
     }
     inFlight_ = InFlight{};
-    if (!engineReport.accepted) {  // not reachable with the checks above; kept for safety
+    if (!engineReport.accepted) {  // e.g. QuantityOverflow: rejected by the engine before anything executed
         r.status = OrderStatus::Rejected;
         r.rejectReason = engineReport.rejectReason;
         r.remainingQuantity = 0;
@@ -337,7 +337,7 @@ ExecutionReport OrderManager::modify(OrderId id, std::optional<Price> newPrice,
         throw;
     }
     inFlight_ = InFlight{};
-    if (!engineReport.accepted) return fail(engineReport.rejectReason);  // defensive
+    if (!engineReport.accepted) return fail(engineReport.rejectReason);  // e.g. QuantityOverflow: order untouched
     r.price = price;  // plain assignments: cannot fail
     r.sequence = sequence;
     r.remainingQuantity = quantity;
