@@ -1,7 +1,8 @@
 # Benchmarks
 
 This document describes the benchmark suite and what it measured on the production code of commit `f125d84`
-(`src/` and `include/` are still byte-identical to that commit). It is measured performance on **one Windows 11
+(the code the benchmarks measure, the `lob_core` sources, has the same code as that commit; later commits changed
+only comments in three headers and `src/Cli.cpp`, which the benchmarks do not use). It is measured performance on **one Windows 11
 laptop with one compiler**, not a production-readiness certification.
 
 ## Summary: read this before using any number

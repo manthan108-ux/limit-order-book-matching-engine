@@ -6,6 +6,9 @@ left rests in the book. Orders can be cancelled and modified, and every order ke
 history. The project emphasizes correctness evidence (an independent reference model, system-level invariant
 audits, deterministic fault injection) and honest measurement.
 
+It is a **standalone, in-memory command-line simulator**: it has no network or exchange connectivity, does not
+trade real instruments, persists nothing, and is not a production trading system.
+
 - **420 tests in 18 suites**, zero compiler warnings, no external dependencies.
 - **Windows** with GCC/MinGW-w64, CMake and Ninja. **Windows 11 is verified; Windows 10 is not verified.** No
   other operating system or compiler has been tried.
@@ -317,7 +320,7 @@ of `lob_cli.exe` as its first argument; CTest supplies it).
 |---|---|
 | Tests | **420 tests in 18 suites**, all passing |
 | Release and Debug builds with `-Werror` | 0 warnings; 18/18 suites |
-| UBSan (trap-on-error) and `_GLIBCXX_DEBUG` builds | 18/18 suites, no trap, no abort |
+| UBSan (trap-on-error) and `_GLIBCXX_DEBUG` builds | 18/18 suites, no trap, no abort (last run when the suite had 412 tests; **not re-run** since the final fixes) |
 | Line coverage (gcov, all suites) | 88.35% (`OrderBook.cpp`) to 100% (`Order.cpp`, `Trade.cpp`) across the eight source files |
 | Validation | independent reference model, system-level invariant auditor, seeded randomized workloads (35,160 steps compared with the model), boundary and adversarial sequences, deterministic allocation-failure injection, the real `lob_cli.exe` as a subprocess |
 | Defects found by this work | four, all fixed (including a level-quantity overflow near `INT64_MAX`) |
