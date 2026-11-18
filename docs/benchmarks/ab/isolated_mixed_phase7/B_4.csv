@@ -1,0 +1,21 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 39.4 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 15
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --no-latency --reps 15 --filter mixed_phase7 --csv <path omitted>
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+mixed_phase7,profile=narrow,seed=20260601;steps=30000;ops=38589,core,38589,15,2,319.61,308.25,509.89,339.79,52.90,15.57,3128770,3244136,12.334,,,,,,,,trades=23246;records=26419;active=62
+mixed_phase7,profile=wide,seed=20260601;steps=30000;ops=38581,core,38581,15,2,339.96,327.52,442.03,347.40,28.65,8.25,2941522,3053236,13.116,,,,,,,,trades=23313;records=26371;active=117
+mixed_phase7,profile=mixed,seed=20260601;steps=30000;ops=38578,core,38578,15,2,331.95,315.01,558.25,358.77,65.74,18.32,3012471,3174491,12.806,,,,,,,,trades=23622;records=26381;active=123

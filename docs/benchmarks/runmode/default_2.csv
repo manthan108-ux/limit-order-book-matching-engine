@@ -1,0 +1,29 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 39.5 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 21
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --filter cancel_in_queue layer=book --csv <path omitted>
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,core,50000,21,2,55.40,49.24,93.89,57.92,9.30,16.05,18050542,20310342,2.770,,batch_mean(362),417,43.4,144.5,335.4,1584.1,
+cancel_in_queue,layer=book;order=middle-out,queue=50000,core,50000,21,2,53.57,50.23,231.84,64.17,38.98,60.74,18667164,19910007,2.679,,batch_mean(374),402,43.9,166.6,317.4,1150.5,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,core,50000,21,2,51.04,47.42,66.83,51.62,4.77,9.24,19590941,21087259,2.552,,batch_mean(392),384,41.3,55.9,216.6,743.1,
+cancel_in_queue,layer=book;order=oldest-first,queue=100,scale-perlevel,100,21,2,39.00,38.00,43.00,39.81,1.25,3.14,25641026,26315789,0.004,,batch_mean(513),3,40.0,41.0,41.0,41.0,
+cancel_in_queue,layer=book;order=newest-first,queue=100,scale-perlevel,100,21,2,39.00,39.00,134.00,44.05,20.64,46.85,25641026,25641026,0.004,,batch_mean(513),3,40.0,41.0,41.0,41.0,
+cancel_in_queue,layer=book;order=oldest-first,queue=1000,scale-perlevel,1000,21,2,39.80,39.50,44.30,40.01,1.00,2.51,25125628,25316456,0.040,,batch_mean(503),6,39.0,41.0,41.0,41.0,
+cancel_in_queue,layer=book;order=newest-first,queue=1000,scale-perlevel,1000,21,2,39.50,39.00,39.90,39.46,0.23,0.58,25316456,25641026,0.040,,batch_mean(507),6,38.9,41.0,41.0,41.0,
+cancel_in_queue,layer=book;order=oldest-first,queue=10000,scale-perlevel,10000,21,2,39.23,38.89,69.44,42.62,8.33,19.55,25490696,25713551,0.392,,batch_mean(510),60,39.0,43.1,57.4,57.4,
+cancel_in_queue,layer=book;order=newest-first,queue=10000,scale-perlevel,10000,21,2,38.85,38.54,44.80,39.47,1.50,3.81,25740026,25947068,0.389,,batch_mean(515),60,38.4,41.9,60.2,60.2,
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,scale-perlevel,50000,21,2,51.00,42.03,63.61,51.50,4.55,8.83,19607074,23792529,2.550,,batch_mean(393),384,44.3,100.8,474.6,816.9,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,scale-perlevel,50000,21,2,49.69,40.96,65.64,50.63,7.22,14.25,20123964,24411679,2.485,,batch_mean(403),375,41.9,60.0,264.3,717.4,

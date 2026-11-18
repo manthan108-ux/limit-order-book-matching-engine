@@ -1,0 +1,41 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 39.9 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 15
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --no-latency --reps 15 --filter submit_resting --csv <path omitted>
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+submit_resting,layer=book,preload=100000;levels=1000;ops=50000,core,50000,15,2,184.13,175.18,357.44,197.28,45.65,23.14,5431064,5708545,9.206,,,,,,,,
+submit_resting,layer=engine,preload=100000;levels=1000;ops=50000,core,50000,15,2,547.87,304.83,570.42,533.16,63.58,11.92,1825244,3280539,27.394,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=1000;ops=50000,core,50000,15,2,844.92,832.11,865.91,846.35,9.64,1.14,1183544,1201764,42.246,,,,,,,,
+submit_resting,layer=book,preload=1000;levels=100;ops=20000,scale-active,20000,15,2,282.70,270.39,288.37,281.38,5.50,1.95,3537256,3698293,5.654,,,,,,,,
+submit_resting,layer=manager,preload=1000;levels=100;ops=20000,scale-active,20000,15,2,591.40,536.81,635.51,594.48,24.06,4.05,1690889,1862857,11.828,,,,,,,,
+submit_resting,layer=book,preload=10000;levels=1000;ops=20000,scale-active,20000,15,2,354.05,346.31,361.79,354.78,4.26,1.20,2824500,2887628,7.081,,,,,,,,
+submit_resting,layer=manager,preload=10000;levels=1000;ops=20000,scale-active,20000,15,2,790.20,779.58,800.60,789.84,7.14,0.90,1265502,1282742,15.804,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=10000;ops=20000,scale-active,20000,15,2,593.24,534.99,861.88,604.41,74.16,12.27,1685673,1869211,11.865,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=10000;ops=20000,scale-active,20000,15,2,1137.98,1105.79,1199.85,1140.48,25.69,2.25,878750,904335,22.760,,,,,,,,
+submit_resting,layer=book,preload=250000;levels=25000;ops=20000,scale-active,20000,15,2,760.27,722.24,789.77,758.72,17.57,2.32,1315322,1384581,15.205,,,,,,,,
+submit_resting,layer=manager,preload=250000;levels=25000;ops=20000,scale-active,20000,15,2,1360.24,1293.01,1487.79,1381.59,61.53,4.45,735162,773389,27.205,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=1;ops=20000,scale-levels,20000,15,2,162.36,160.47,177.41,164.24,4.32,2.63,6159153,6231500,3.247,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=1;ops=20000,scale-levels,20000,15,2,362.84,351.40,369.42,362.72,3.74,1.03,2756036,2845760,7.257,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=10;ops=20000,scale-levels,20000,15,2,204.71,202.19,210.97,204.93,2.09,1.02,4885079,4945843,4.094,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=10;ops=20000,scale-levels,20000,15,2,420.01,416.74,427.33,420.53,3.08,0.73,2380867,2399606,8.400,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=100;ops=20000,scale-levels,20000,15,2,245.56,242.05,248.18,245.33,1.57,0.64,4072242,4131378,4.911,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=100;ops=20000,scale-levels,20000,15,2,493.78,484.58,498.39,492.95,3.82,0.78,2025193,2063621,9.876,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=1000;ops=20000,scale-levels,20000,15,2,328.24,326.31,333.12,328.63,2.00,0.61,3046551,3064617,6.565,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=1000;ops=20000,scale-levels,20000,15,2,709.80,701.21,740.86,712.14,10.10,1.42,1408838,1426116,14.196,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=10000;ops=20000,scale-levels,20000,15,2,583.32,553.51,598.28,581.79,11.42,1.96,1714340,1806636,11.666,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=10000;ops=20000,scale-levels,20000,15,2,1070.50,989.88,1083.81,1064.61,21.87,2.05,934143,1010223,21.410,,,,,,,,
+submit_resting,layer=book,preload=100000;levels=50000;ops=20000,scale-levels,20000,15,2,934.28,905.75,971.26,937.59,15.21,1.62,1070343,1104057,18.686,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=50000;ops=20000,scale-levels,20000,15,2,1440.95,1424.37,1632.05,1463.36,52.96,3.62,693987,702067,28.819,,,,,,,,

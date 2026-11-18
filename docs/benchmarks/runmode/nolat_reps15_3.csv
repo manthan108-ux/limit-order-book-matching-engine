@@ -1,0 +1,29 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 39.6 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 15
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --no-latency --reps 15 --filter cancel_in_queue layer=book --csv <path omitted>
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,core,50000,15,2,55.90,52.76,69.14,57.27,4.89,8.53,17887808,18954471,2.795,,,,,,,,
+cancel_in_queue,layer=book;order=middle-out,queue=50000,core,50000,15,2,52.27,50.27,59.19,53.20,3.04,5.71,19130701,19891789,2.614,,,,,,,,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,core,50000,15,2,50.41,48.15,65.95,52.80,4.97,9.42,19835760,20770157,2.521,,,,,,,,
+cancel_in_queue,layer=book;order=oldest-first,queue=100,scale-perlevel,100,15,2,41.00,39.00,162.00,51.87,31.78,61.27,24390244,25641026,0.004,,,,,,,,
+cancel_in_queue,layer=book;order=newest-first,queue=100,scale-perlevel,100,15,2,41.00,40.00,78.00,44.13,10.29,23.33,24390244,25000000,0.004,,,,,,,,
+cancel_in_queue,layer=book;order=oldest-first,queue=1000,scale-perlevel,1000,15,2,40.10,38.90,57.70,41.38,4.72,11.41,24937656,25706941,0.040,,,,,,,,
+cancel_in_queue,layer=book;order=newest-first,queue=1000,scale-perlevel,1000,15,2,39.30,39.00,39.40,39.23,0.12,0.31,25445293,25641026,0.039,,,,,,,,
+cancel_in_queue,layer=book;order=oldest-first,queue=10000,scale-perlevel,10000,15,2,39.04,38.83,40.34,39.23,0.47,1.20,25614754,25753284,0.390,,,,,,,,
+cancel_in_queue,layer=book;order=newest-first,queue=10000,scale-perlevel,10000,15,2,38.87,38.64,41.35,39.06,0.68,1.75,25726782,25879917,0.389,,,,,,,,
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,scale-perlevel,50000,15,2,53.43,48.81,93.55,57.04,11.40,19.99,18714676,20488445,2.672,,,,,,,,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,scale-perlevel,50000,15,2,49.30,47.03,57.22,50.33,3.20,6.36,20285622,21262119,2.465,,,,,,,,

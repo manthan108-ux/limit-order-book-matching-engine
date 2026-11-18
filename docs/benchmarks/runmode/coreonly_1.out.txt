@@ -1,0 +1,71 @@
+lob_bench: 47 scenarios
+  cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+  logical_cpus: 16
+  ram_gb: 15.6
+  os: Windows
+  compiler: GNU 16.2.0
+  build_type: Release
+  cxx_flags: -O3 -DNDEBUG
+  ndebug: yes
+  clock_resolution: 100.0 ns
+  clock_call_overhead: 39.4 ns
+  pinned_cpu: 2
+  mode: full
+  repetitions: 11
+  warmup_runs: 2
+  latency_repetitions: 3
+  latency_per_op_threshold_ns: 2000
+  (latency 'op' = per-operation timing, includes ~39 ns timer cost and is quantized to 100 ns; 'bm' = percentiles of batch MEANS)
+
+== core ==
+submit_resting [layer=book] preload=100000;levels=1000;ops=50000          176.1ns/op  min   172.9ns  max   218.5ns  cv   7.9%      5.68 Mop/s
+submit_resting [layer=engine] preload=100000;levels=1000;ops=50000        255.6ns/op  min   243.1ns  max   293.7ns  cv   6.3%      3.91 Mop/s
+submit_resting [layer=manager] preload=100000;levels=1000;ops=50000       375.5ns/op  min   370.0ns  max   619.3ns  cv  18.2%      2.66 Mop/s
+cancel_in_queue [layer=book;order=oldest-first] queue=50000                40.8ns/op  min    39.7ns  max    49.7ns  cv   7.1%     24.54 Mop/s
+cancel_in_queue [layer=book;order=middle-out] queue=50000                  42.7ns/op  min    41.1ns  max    61.7ns  cv  16.0%     23.44 Mop/s
+cancel_in_queue [layer=book;order=newest-first] queue=50000                39.8ns/op  min    39.0ns  max    66.8ns  cv  19.0%     25.10 Mop/s
+cancel_in_queue [layer=engine;order=oldest-first] queue=50000              41.0ns/op  min    39.6ns  max    97.2ns  cv  36.1%     24.42 Mop/s
+cancel_in_queue [layer=engine;order=middle-out] queue=50000                41.8ns/op  min    41.0ns  max    49.6ns  cv   7.8%     23.90 Mop/s
+cancel_in_queue [layer=engine;order=newest-first] queue=50000              39.5ns/op  min    39.1ns  max    52.0ns  cv   9.6%     25.30 Mop/s
+cancel_in_queue [layer=manager;order=oldest-first] queue=50000             50.6ns/op  min    49.5ns  max    56.6ns  cv   4.5%     19.78 Mop/s
+cancel_in_queue [layer=manager;order=middle-out] queue=50000               57.6ns/op  min    53.7ns  max    68.8ns  cv   8.0%     17.36 Mop/s
+cancel_in_queue [layer=manager;order=newest-first] queue=50000             52.8ns/op  min    48.2ns  max    59.3ns  cv   6.7%     18.94 Mop/s
+cancel_at_level [layer=book;levels=best] levels=10000;per_level=20;ca      54.1ns/op  min    50.9ns  max   113.6ns  cv  30.4%     18.47 Mop/s
+cancel_at_level [layer=book;levels=worst] levels=10000;per_level=20;c      54.4ns/op  min    52.9ns  max    65.1ns  cv   6.4%     18.39 Mop/s
+cancel_at_level [layer=manager;levels=best] levels=10000;per_level=20      65.2ns/op  min    64.1ns  max   101.6ns  cv  15.9%     15.33 Mop/s
+cancel_at_level [layer=manager;levels=worst] levels=10000;per_level=2      69.7ns/op  min    66.5ns  max    80.5ns  cv   5.6%     14.34 Mop/s
+cancel_random [layer=book] preload=100000;levels=1000;ops=20000           276.2ns/op  min   254.1ns  max   398.5ns  cv  15.0%      3.62 Mop/s
+cancel_random [layer=engine] preload=100000;levels=1000;ops=20000         271.9ns/op  min   257.3ns  max   393.5ns  cv  14.2%      3.68 Mop/s
+cancel_random [layer=manager] preload=100000;levels=1000;ops=20000        436.1ns/op  min   344.8ns  max   669.8ns  cv  20.6%      2.29 Mop/s
+modify [kind=qty-decrease(in-place)] preload=100000;levels=1000;ops=2     194.8ns/op  min   191.1ns  max   224.7ns  cv   5.3%      5.13 Mop/s
+modify [kind=qty-increase(replace)] preload=100000;levels=1000;ops=20     679.0ns/op  min   576.7ns  max   767.3ns  cv  11.5%      1.47 Mop/s
+modify [kind=price-change(replace)] preload=100000;levels=1000;ops=20     593.5ns/op  min   581.5ns  max   749.3ns  cv  10.4%      1.69 Mop/s
+match_one_to_one [layer=engine] trades=50000                              130.3ns/op  min   125.8ns  max   150.5ns  cv   5.6%      7.68 Mop/s
+match_one_to_many [layer=engine] trades=50000;makers=50000;levels=1       116.6ns/op  min   106.3ns  max   131.0ns  cv   6.0%      8.57 Mop/s
+match_many_to_one [layer=engine] trades=50000                              84.6ns/op  min    83.5ns  max    90.8ns  cv   2.5%     11.82 Mop/s
+match_multi_level [layer=engine] levels=5000;per_level=1;trades=5000      144.9ns/op  min   142.2ns  max   160.1ns  cv   4.3%      6.90 Mop/s
+    (warning: the timed region is under 1 ms; quantization may dominate)
+match_multi_level [layer=engine] levels=100;per_level=500;trades=5000     117.5ns/op  min   105.6ns  max   124.2ns  cv   5.1%      8.51 Mop/s
+match_one_to_one [layer=manager] trades=50000                             356.6ns/op  min   331.7ns  max   667.0ns  cv  24.7%      2.80 Mop/s
+match_one_to_many [layer=manager] trades=50000;makers=50000;levels=1      167.7ns/op  min   159.1ns  max   217.8ns  cv   9.8%      5.96 Mop/s
+match_many_to_one [layer=manager] trades=50000                            237.1ns/op  min   223.8ns  max   301.3ns  cv   9.1%      4.22 Mop/s
+match_multi_level [layer=manager] levels=5000;per_level=1;trades=5000     171.3ns/op  min   168.4ns  max   201.4ns  cv   5.4%      5.84 Mop/s
+    (warning: the timed region is under 1 ms; quantization may dominate)
+match_multi_level [layer=manager] levels=100;per_level=500;trades=500     171.1ns/op  min   162.2ns  max   200.8ns  cv   6.8%      5.85 Mop/s
+market_data [query=bestBid] orders=100000;levels_per_side=1000;ops=20       1.4ns/op  min     1.4ns  max     4.0ns  cv  43.0%    689.87 Mop/s
+market_data [query=bestAsk] orders=100000;levels_per_side=1000;ops=20       1.4ns/op  min     1.4ns  max     1.7ns  cv   5.5%    694.73 Mop/s
+market_data [query=spread] orders=100000;levels_per_side=1000;ops=200       1.5ns/op  min     1.5ns  max     1.5ns  cv   1.2%    677.12 Mop/s
+market_data [query=midPrice] orders=100000;levels_per_side=1000;ops=2       2.7ns/op  min     2.7ns  max     2.8ns  cv   1.1%    369.87 Mop/s
+market_data [query=depth(1)] orders=100000;levels_per_side=1000;ops=5      77.8ns/op  min    76.5ns  max    80.4ns  cv   1.2%     12.86 Mop/s
+market_data [query=depth(5)] orders=100000;levels_per_side=1000;ops=5     100.8ns/op  min    98.2ns  max   107.1ns  cv   2.4%      9.92 Mop/s
+market_data [query=depth(20)] orders=100000;levels_per_side=1000;ops=     203.5ns/op  min   200.8ns  max   220.5ns  cv   2.8%      4.91 Mop/s
+market_data [query=depth(100)] orders=100000;levels_per_side=1000;ops     879.4ns/op  min   860.0ns  max    1.92us  cv  30.9%      1.14 Mop/s
+order_lookup [query=book.find] orders=100000;levels_per_side=1000;ops      10.7ns/op  min    10.4ns  max    11.5ns  cv   3.3%     93.77 Mop/s
+order_lookup [query=book.contains] orders=100000;levels_per_side=1000       7.9ns/op  min     7.6ns  max    28.6ns  cv  61.0%    127.07 Mop/s
+order_lookup [query=manager.knows] orders=100000;levels_per_side=1000      10.3ns/op  min     9.2ns  max    13.5ns  cv  10.8%     97.19 Mop/s
+order_lookup [query=manager.order] orders=100000;levels_per_side=1000      30.6ns/op  min    26.0ns  max    49.9ns  cv  21.1%     32.68 Mop/s
+mixed_phase7 [profile=narrow] seed=20260601;steps=30000;ops=38589         291.5ns/op  min   280.1ns  max   373.1ns  cv   9.6%      3.43 Mop/s  [trades=23246;records=26419;active=62]
+mixed_phase7 [profile=wide] seed=20260601;steps=30000;ops=38581           316.4ns/op  min   307.9ns  max   546.3ns  cv  22.1%      3.16 Mop/s  [trades=23313;records=26371;active=117]
+mixed_phase7 [profile=mixed] seed=20260601;steps=30000;ops=38578          299.2ns/op  min   294.6ns  max   376.7ns  cv   7.6%      3.34 Mop/s  [trades=23622;records=26381;active=123]
+
+all scenarios validated and measured

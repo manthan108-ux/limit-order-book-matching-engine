@@ -1,0 +1,3 @@
+scenario|variant|params                                                                               A_med      B_med     B/A      A_min      B_min     B/A  wins(B faster median)
+match_many_to_one|layer=engine|trades=50000                                                            91.0       97.4   1.071       84.5       89.2   1.055  4/8
+match_many_to_one|layer=manager|trades=50000                                                          282.6      283.6   1.003      258.0      263.7   1.022  4/8

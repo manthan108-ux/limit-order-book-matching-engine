@@ -1,0 +1,65 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 39.7 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 15
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --no-latency --reps 15 --group core --csv <path omitted>
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+submit_resting,layer=book,preload=100000;levels=1000;ops=50000,core,50000,15,2,180.41,175.15,190.79,181.56,4.66,2.57,5542807,5709262,9.021,,,,,,,,
+submit_resting,layer=engine,preload=100000;levels=1000;ops=50000,core,50000,15,2,207.02,200.23,225.87,209.70,8.33,3.97,4830358,4994356,10.351,,,,,,,,
+submit_resting,layer=manager,preload=100000;levels=1000;ops=50000,core,50000,15,2,336.41,316.06,980.81,381.60,166.76,43.70,2972563,3163956,16.820,,,,,,,,
+cancel_in_queue,layer=book;order=oldest-first,queue=50000,core,50000,15,2,40.29,39.48,49.07,41.30,2.91,7.04,24821287,25329281,2.014,,,,,,,,
+cancel_in_queue,layer=book;order=middle-out,queue=50000,core,50000,15,2,42.04,41.32,66.59,45.53,7.18,15.78,23784607,24200184,2.102,,,,,,,,
+cancel_in_queue,layer=book;order=newest-first,queue=50000,core,50000,15,2,40.71,39.51,66.55,43.79,8.76,20.00,24566403,25312611,2.035,,,,,,,,
+cancel_in_queue,layer=engine;order=oldest-first,queue=50000,core,50000,15,2,41.35,40.19,64.31,44.61,7.41,16.62,24181458,24879335,2.068,,,,,,,,
+cancel_in_queue,layer=engine;order=middle-out,queue=50000,core,50000,15,2,48.91,42.20,69.93,49.31,7.63,15.48,20444881,23697806,2.446,,,,,,,,
+cancel_in_queue,layer=engine;order=newest-first,queue=50000,core,50000,15,2,39.94,39.16,53.88,42.25,4.30,10.17,25040064,25538870,1.997,,,,,,,,
+cancel_in_queue,layer=manager;order=oldest-first,queue=50000,core,50000,15,2,48.26,47.43,63.63,50.07,4.16,8.30,20719377,21082813,2.413,,,,,,,,
+cancel_in_queue,layer=manager;order=middle-out,queue=50000,core,50000,15,2,57.88,53.33,70.19,59.39,4.70,7.92,17277722,18752578,2.894,,,,,,,,
+cancel_in_queue,layer=manager;order=newest-first,queue=50000,core,50000,15,2,50.34,48.98,56.87,51.38,2.33,4.54,19863340,20418164,2.517,,,,,,,,
+cancel_at_level,layer=book;levels=best,levels=10000;per_level=20;cancel_levels=1000,core,19000,15,2,52.73,50.95,57.67,53.45,2.08,3.89,18965861,19628099,1.002,,,,,,,,
+cancel_at_level,layer=book;levels=worst,levels=10000;per_level=20;cancel_levels=1000,core,19000,15,2,60.53,54.48,81.62,62.27,8.53,13.70,16521739,18355714,1.150,,,,,,,,
+cancel_at_level,layer=manager;levels=best,levels=10000;per_level=20;cancel_levels=1000,core,19000,15,2,69.96,64.57,487.66,121.74,108.25,88.92,14294312,15486185,1.329,,,,,,,,
+cancel_at_level,layer=manager;levels=worst,levels=10000;per_level=20;cancel_levels=1000,core,19000,15,2,148.51,70.61,265.42,146.43,51.05,34.86,6733529,14163250,2.822,,,,,,,,
+cancel_random,layer=book,preload=100000;levels=1000;ops=20000,core,20000,15,2,706.37,600.70,863.90,727.01,86.33,11.87,1415689,1664724,14.127,,,,,,,,
+cancel_random,layer=engine,preload=100000;levels=1000;ops=20000,core,20000,15,2,800.83,584.15,864.88,761.67,91.55,12.02,1248712,1711874,16.017,,,,,,,,
+cancel_random,layer=manager,preload=100000;levels=1000;ops=20000,core,20000,15,2,776.98,602.79,922.67,789.48,92.57,11.73,1287034,1658953,15.540,,,,,,,,
+modify,kind=qty-decrease(in-place),preload=100000;levels=1000;ops=20000,core,20000,15,2,435.12,365.06,519.80,446.17,46.65,10.46,2298190,2739276,8.703,,,,,,,,
+modify,kind=qty-increase(replace),preload=100000;levels=1000;ops=20000,core,20000,15,2,1267.70,1197.76,1467.36,1289.64,76.67,5.95,788827,834895,25.354,,,,,,,,
+modify,kind=price-change(replace),preload=100000;levels=1000;ops=20000,core,20000,15,2,1278.35,1059.10,1410.16,1288.35,93.08,7.22,782258,944202,25.567,,,,,,,,
+match_one_to_one,layer=engine,trades=50000,core,50000,15,2,310.29,300.08,313.77,309.05,4.36,1.41,3222771,3332400,15.515,,,,,,,,
+match_one_to_many,layer=engine,trades=50000;makers=50000;levels=1,core,50000,15,2,260.24,231.99,271.83,255.64,11.38,4.45,3842636,4310568,13.012,,,,,,,,
+match_many_to_one,layer=engine,trades=50000,core,50000,15,2,207.59,204.67,210.15,207.46,1.75,0.84,4817095,4885866,10.380,,,,,,,,
+match_multi_level,layer=engine,levels=5000;per_level=1;trades=5000,core,5000,15,2,311.20,296.74,347.46,317.61,13.98,4.40,3213368,3369953,1.556,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=500;trades=50000,core,50000,15,2,255.79,247.28,275.81,258.34,7.11,2.75,3909396,4044031,12.790,,,,,,,,
+match_one_to_one,layer=manager,trades=50000,core,50000,15,2,777.72,723.35,800.28,773.69,19.76,2.55,1285810,1382457,38.886,,,,,,,,
+match_one_to_many,layer=manager,trades=50000;makers=50000;levels=1,core,50000,15,2,376.18,352.37,401.14,375.50,13.74,3.66,2658330,2837958,18.809,,,,,,,,
+match_many_to_one,layer=manager,trades=50000,core,50000,15,2,566.56,535.48,588.20,562.86,12.94,2.30,1765032,1867469,28.328,,,,,,,,
+match_multi_level,layer=manager,levels=5000;per_level=1;trades=5000,core,5000,15,2,381.46,362.62,420.48,385.39,16.48,4.28,2621507,2757708,1.907,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=500;trades=50000,core,50000,15,2,395.77,348.65,459.87,395.63,32.76,8.28,2526746,2868206,19.788,,,,,,,,
+market_data,query=bestBid,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,15,2,3.27,3.26,3.31,3.27,0.01,0.34,306039693,306428878,6.535,,,,,,,,
+market_data,query=bestAsk,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,15,2,2.75,2.75,2.81,2.76,0.02,0.64,363596699,364159429,5.501,,,,,,,,
+market_data,query=spread,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,15,2,3.37,3.36,3.39,3.37,0.01,0.28,296551111,297672203,6.744,,,,,,,,
+market_data,query=midPrice,orders=100000;levels_per_side=1000;ops=2000000,core,2000000,15,2,6.19,6.18,6.24,6.19,0.02,0.28,161609632,161843724,12.376,,,,,,,,
+market_data,query=depth(1),orders=100000;levels_per_side=1000;ops=50000,core,50000,15,2,176.73,175.41,177.82,176.52,0.77,0.44,5658349,5701059,8.836,,,,,,,,
+market_data,query=depth(5),orders=100000;levels_per_side=1000;ops=50000,core,50000,15,2,226.01,223.24,228.74,226.16,1.42,0.63,4424505,4479524,11.301,,,,,,,,
+market_data,query=depth(20),orders=100000;levels_per_side=1000;ops=50000,core,50000,15,2,462.37,453.33,473.58,463.02,5.00,1.08,2162761,2205918,23.119,,,,,,,,
+market_data,query=depth(100),orders=100000;levels_per_side=1000;ops=50000,core,50000,15,2,1894.65,1881.16,1900.55,1892.97,6.28,0.33,527801,531586,94.733,,,,,,,,
+order_lookup,query=book.find,orders=100000;levels_per_side=1000;ops=500000,core,500000,15,2,30.61,26.66,33.52,30.05,2.72,9.06,32667141,37511910,15.306,,,,,,,,
+order_lookup,query=book.contains,orders=100000;levels_per_side=1000;ops=500000,core,500000,15,2,18.66,16.29,20.15,18.30,1.23,6.75,53587696,61388108,9.331,,,,,,,,
+order_lookup,query=manager.knows,orders=100000;levels_per_side=1000;ops=500000,core,500000,15,2,23.45,21.80,24.33,23.24,0.78,3.34,42641741,45880399,11.726,,,,,,,,
+order_lookup,query=manager.order,orders=100000;levels_per_side=1000;ops=500000,core,500000,15,2,64.65,49.52,69.05,62.44,6.33,10.13,15466804,20195248,32.327,,,,,,,,
+mixed_phase7,profile=narrow,seed=20260601;steps=30000;ops=38589,core,38589,15,2,672.16,665.95,678.89,672.21,3.64,0.54,1487751,1501617,25.938,,,,,,,,trades=23246;records=26419;active=62
+mixed_phase7,profile=wide,seed=20260601;steps=30000;ops=38581,core,38581,15,2,726.83,713.40,733.93,726.70,5.28,0.73,1375844,1401743,28.042,,,,,,,,trades=23313;records=26371;active=117
+mixed_phase7,profile=mixed,seed=20260601;steps=30000;ops=38578,core,38578,15,2,695.99,678.29,700.22,693.08,6.43,0.93,1436802,1474294,26.850,,,,,,,,trades=23622;records=26381;active=123

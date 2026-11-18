@@ -1,0 +1,34 @@
+# cpu: 13th Gen Intel(R) Core(TM) i7-13620H
+# logical_cpus: 16
+# ram_gb: 15.6
+# os: Windows
+# compiler: GNU 16.2.0
+# build_type: Release
+# cxx_flags: -O3 -DNDEBUG
+# ndebug: yes
+# clock_resolution: 100.0 ns
+# clock_call_overhead: 40.2 ns
+# pinned_cpu: 2
+# mode: full
+# repetitions: 15
+# warmup_runs: 2
+# latency_repetitions: 3
+# latency_per_op_threshold_ns: 2000
+# command_line: --pin 2 --no-latency --reps 15 --filter match_ --csv <path omitted>
+scenario,variant,params,group,ops_per_run,reps,warmup,median_ns_per_op,min_ns_per_op,max_ns_per_op,mean_ns_per_op,stddev_ns,cv_percent,throughput_median_ops_per_s,throughput_best_ops_per_s,median_run_ms,lat_group,lat_method,lat_samples,lat_p50_ns,lat_p95_ns,lat_p99_ns,lat_max_ns,note
+match_one_to_one,layer=engine,trades=50000,core,50000,15,2,146.75,132.09,170.15,145.67,11.98,8.22,6814496,7570596,7.337,,,,,,,,
+match_one_to_many,layer=engine,trades=50000;makers=50000;levels=1,core,50000,15,2,140.76,120.85,208.95,145.51,22.36,15.37,7104190,8274995,7.038,,,,,,,,
+match_many_to_one,layer=engine,trades=50000,core,50000,15,2,83.83,79.88,146.74,90.87,18.90,20.80,11928619,12518151,4.192,,,,,,,,
+match_multi_level,layer=engine,levels=5000;per_level=1;trades=5000,core,5000,15,2,185.64,157.02,200.76,182.53,14.80,8.11,5386770,6368615,0.928,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=500;trades=50000,core,50000,15,2,132.14,120.92,225.69,144.94,32.12,22.16,7567502,8270067,6.607,,,,,,,,
+match_one_to_one,layer=manager,trades=50000,core,50000,15,2,367.11,318.55,856.74,521.44,221.95,42.56,2723950,3139244,18.356,,,,,,,,
+match_one_to_many,layer=manager,trades=50000;makers=50000;levels=1,core,50000,15,2,390.98,349.52,653.32,408.49,70.00,17.14,2557689,2861034,19.549,,,,,,,,
+match_many_to_one,layer=manager,trades=50000,core,50000,15,2,541.04,516.29,640.10,547.38,31.64,5.78,1848279,1936888,27.052,,,,,,,,
+match_multi_level,layer=manager,levels=5000;per_level=1;trades=5000,core,5000,15,2,320.56,311.62,383.58,328.58,19.69,5.99,3119541,3209037,1.603,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=500;trades=50000,core,50000,15,2,361.91,341.28,433.19,367.61,22.11,6.01,2763148,2930163,18.095,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=10;trades=1000,scale-perlevel,1000,15,2,155.00,152.90,161.40,155.32,2.44,1.57,6451613,6540222,0.155,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=10;trades=1000,scale-perlevel,1000,15,2,242.10,150.50,279.60,241.81,27.96,11.56,4130525,6644518,0.242,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=100;trades=10000,scale-perlevel,10000,15,2,202.91,182.02,230.63,203.68,9.78,4.80,4928293,5493902,2.029,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=100;trades=10000,scale-perlevel,10000,15,2,314.28,293.44,381.73,320.99,20.03,6.24,3181876,3407852,3.143,,,,,,,,
+match_multi_level,layer=engine,levels=100;per_level=500;trades=50000,scale-perlevel,50000,15,2,241.82,234.94,256.20,243.14,6.23,2.56,4135341,4256442,12.091,,,,,,,,
+match_multi_level,layer=manager,levels=100;per_level=500;trades=50000,scale-perlevel,50000,15,2,359.26,342.98,374.18,356.75,8.18,2.29,2783515,2915588,17.963,,,,,,,,

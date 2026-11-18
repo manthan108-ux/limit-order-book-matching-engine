@@ -1,0 +1,22 @@
+scenario|variant|params                                                                               A_med      B_med     B/A      A_min      B_min     B/A  wins(B faster median)
+submit_resting|layer=book|preload=100000;levels=1000;ops=50000                                        182.4      195.1   1.070      175.3      174.9   0.998  2/4
+submit_resting|layer=engine|preload=100000;levels=1000;ops=50000                                      546.7      459.5   0.841      477.0      390.0   0.818  4/4
+submit_resting|layer=manager|preload=100000;levels=1000;ops=50000                                     842.3      727.3   0.864      827.4      710.6   0.859  4/4
+submit_resting|layer=book|preload=1000;levels=100;ops=20000                                           284.2      281.7   0.991      270.8      272.1   1.005  4/4
+submit_resting|layer=manager|preload=1000;levels=100;ops=20000                                        593.4      576.1   0.971      565.5      551.5   0.975  4/4
+submit_resting|layer=book|preload=10000;levels=1000;ops=20000                                         352.8      354.5   1.005      345.6      349.1   1.010  1/4
+submit_resting|layer=manager|preload=10000;levels=1000;ops=20000                                      791.7      676.1   0.854      760.2      659.2   0.867  4/4
+submit_resting|layer=book|preload=100000;levels=10000;ops=20000                                       591.8      577.0   0.975      549.8      507.8   0.924  7/8
+submit_resting|layer=manager|preload=100000;levels=10000;ops=20000                                   1106.9      956.6   0.864     1052.2      876.0   0.833  8/8
+submit_resting|layer=book|preload=250000;levels=25000;ops=20000                                       770.8      648.3   0.841      712.8      631.3   0.886  2/4
+submit_resting|layer=manager|preload=250000;levels=25000;ops=20000                                   1399.1     1064.9   0.761     1326.3      994.6   0.750  4/4
+submit_resting|layer=book|preload=100000;levels=1;ops=20000                                           164.1      141.4   0.862      146.9      138.4   0.942  2/4
+submit_resting|layer=manager|preload=100000;levels=1;ops=20000                                        317.9      325.1   1.023      294.1      319.6   1.087  1/4
+submit_resting|layer=book|preload=100000;levels=10;ops=20000                                          172.1      176.5   1.026      168.2      162.5   0.966  2/4
+submit_resting|layer=manager|preload=100000;levels=10;ops=20000                                       419.5      367.4   0.876      398.0      362.5   0.911  1/4
+submit_resting|layer=book|preload=100000;levels=100;ops=20000                                         247.1      212.7   0.861      243.4      210.6   0.865  3/4
+submit_resting|layer=manager|preload=100000;levels=100;ops=20000                                      494.9      415.3   0.839      479.3      397.0   0.828  4/4
+submit_resting|layer=book|preload=100000;levels=1000;ops=20000                                        329.5      284.1   0.862      324.9      281.1   0.865  1/4
+submit_resting|layer=manager|preload=100000;levels=1000;ops=20000                                     713.9      518.8   0.727      701.2      510.6   0.728  4/4
+submit_resting|layer=book|preload=100000;levels=50000;ops=20000                                       960.6     1000.4   1.041      923.2      897.4   0.972  1/4
+submit_resting|layer=manager|preload=100000;levels=50000;ops=20000                                   1490.8     1341.4   0.900     1401.7     1262.2   0.900  4/4

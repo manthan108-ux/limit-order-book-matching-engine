@@ -1,0 +1,15 @@
+scenario|variant|params                                                                               A_med      B_med     B/A      A_min      B_min     B/A  wins(B faster median)
+match_one_to_one|layer=engine|trades=50000                                                            146.4      155.6   1.063      134.0      144.3   1.077  0/4
+match_one_to_many|layer=engine|trades=50000;makers=50000;levels=1                                     150.0      144.7   0.965      121.5      120.6   0.993  3/4
+match_many_to_one|layer=engine|trades=50000                                                            87.1       94.0   1.079       79.6       87.8   1.104  0/4
+match_multi_level|layer=engine|levels=5000;per_level=1;trades=5000                                    185.5      161.8   0.872      156.2      153.7   0.984  4/4
+match_multi_level|layer=engine|levels=100;per_level=500;trades=50000                                  192.1      182.1   0.948      175.1      172.0   0.983  4/8
+match_one_to_one|layer=manager|trades=50000                                                           460.4      561.3   1.219      322.1      347.0   1.077  2/4
+match_one_to_many|layer=manager|trades=50000;makers=50000;levels=1                                    391.1      399.8   1.022      362.5      360.6   0.995  2/4
+match_many_to_one|layer=manager|trades=50000                                                          535.6      545.9   1.019      504.0      511.9   1.016  2/4
+match_multi_level|layer=manager|levels=5000;per_level=1;trades=5000                                   322.6      347.6   1.078      311.3      281.1   0.903  3/4
+match_multi_level|layer=manager|levels=100;per_level=500;trades=50000                                 358.9      359.7   1.002      343.2      339.3   0.989  5/8
+match_multi_level|layer=engine|levels=100;per_level=10;trades=1000                                    155.0      154.9   1.000      152.4      148.7   0.975  2/4
+match_multi_level|layer=manager|levels=100;per_level=10;trades=1000                                   241.9      242.3   1.002      215.6      220.2   1.021  2/4
+match_multi_level|layer=engine|levels=100;per_level=100;trades=10000                                  217.5      225.8   1.038      197.7      215.4   1.090  2/4
+match_multi_level|layer=manager|levels=100;per_level=100;trades=10000                                 296.6      289.4   0.976      281.4      280.9   0.998  3/4

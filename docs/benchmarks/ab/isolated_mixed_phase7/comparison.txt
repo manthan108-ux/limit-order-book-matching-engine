@@ -1,0 +1,4 @@
+scenario|variant|params                                                                               A_med      B_med     B/A      A_min      B_min     B/A  wins(B faster median)
+mixed_phase7|profile=narrow|seed=20260601;steps=30000;ops=38589                                       326.1      333.0   1.021      304.0      307.8   1.012  1/8
+mixed_phase7|profile=wide|seed=20260601;steps=30000;ops=38581                                         386.4      360.3   0.932      347.1      331.7   0.956  7/8
+mixed_phase7|profile=mixed|seed=20260601;steps=30000;ops=38578                                        348.1      335.6   0.964      307.3      311.2   1.013  2/8

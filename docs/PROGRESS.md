@@ -11,6 +11,7 @@
 | 6 - CLI (interactive command line) | Complete |
 | 7 - Comprehensive testing and edge-case validation | Complete |
 | 8 - Benchmarking | Complete (measured baseline; no optimization retained) |
+| 8.1 - Benchmark report correction | Complete (documentation and evidence only) |
 | 9 - Documentation and finalization | Not started |
 
 ## Phase 1
@@ -116,9 +117,19 @@ That is 2,160 + 9,000 + 24,000 = 35,160 workload steps against the model, plus 4
 - **Generator extraction preserved behaviour:** 12 (digest, trades, records) tuples were identical before and after and are now pinned by the new test `SharedGeneratorOutputIsPinnedToKnownDigests` (412 tests in total). `Duel.h` gained three read-only accessors.
 - **Scenarios:** 158 (submit, cancel by position/level/random, three modify kinds, four matching shapes, queries, lookups, Phase 7 mixed streams, and scaling over orders, levels, queue length, matching intensity and cancel/modify frequency), at book, engine and manager layers. All validated outside the timed regions.
 - **Method:** `steady_clock` (100 ns tick, ~185 ns per call), 21 repetitions after 2 warm-ups, median/min/max/cv, thread pinned to a P-core, Release only (a Debug build refuses to run, verified), batch-mean latency percentiles for cheap operations.
-- **Headline baseline (manager layer, 100k resting orders):** resting submit ~843 ns, random cancel ~747 ns, cache-hot cancel ~112-126 ns, price-change modify ~1.19 us, mixed Phase 7 stream ~0.7 us/op.
-- **Optimization:** one candidate (skip the overflow pre-check for non-trading orders) was measured with interleaved A/B runs and **reverted**: resting submit improved 13-17% but the mixed workloads showed no distinguishable end-to-end gain and engine-layer matching got 5-7% slower. **No production code was changed in Phase 8.**
-- **Caveats:** one machine/compiler; hybrid laptop CPU not frequency-locked; absolute numbers depend on run mode (short filtered runs reported lower numbers than full runs for the same binary, cause not determined); batch-mean latency understates single-operation tails.
+- **Headline baseline (manager layer, 100k resting orders), two machine states:** resting submit ~843 ns (run 2) / ~391 ns (run 3), random cancel ~747 / ~411 ns, cache-hot cancel ~112 / ~51 ns, price-change modify ~1.19 us / ~0.65 us, mixed Phase 7 stream ~0.7 / ~0.3 us/op. The same binary and command line ran about 2.2x faster in a third full run than in the first two; see Phase 8.1.
+- **Optimization:** one candidate (skip the overflow pre-check for non-trading orders) was measured with interleaved A/B runs and **reverted**: resting submit improved 13-17% at 100k orders but the mixed workloads showed no distinguishable end-to-end gain and engine-layer matching got 5-7% slower. **No production code was changed in Phase 8.**
+- **Caveats:** one machine/compiler; hybrid laptop CPU not frequency-locked; the machine showed two speeds about 2.2x apart whose cause was not determined (Phase 8.1 replaces the original, incorrect "run mode" explanation); batch-mean latency understates single-operation tails.
+
+## Phase 8.1 - benchmark report correction
+
+**Objective:** correct and complete the Phase 8 documentation and preserve the evidence. Documentation and data only; no production code, test or benchmark algorithm was changed (`src/` and `include/` are byte-identical to `f125d84`).
+
+- **Corrected:** the mixed-narrow latency in `BENCHMARKS.md` (the figures had been taken from a different scenario; per-kind per-operation percentiles are now given); the engine-versus-book overhead (it came from a book-layer row measured in a different machine state); the claim that the unchanged book layer was a clean control (it ranges 0.84-1.07 across sizes); and the statement that the isolated A/B reruns were "about 1.0" (only part of that data survived and it was noisier).
+- **Preserved:** `docs/benchmarks/ab/` holds the raw CSVs of the nine surviving A/B sets (100 files), the two comparison scripts, per-set `comparison.txt`, hashes of the binaries compared, and a README that lists what was *not* kept (the isolated `market_data` / `modify` / `cancel_modify_frequency` runs were overwritten; the candidate patch and binary were never saved). Nothing was reconstructed.
+- **New evidence:** `baseline_run1.csv`, `baseline_run3.csv` (two more full runs of the unmodified binary) and `docs/benchmarks/runmode/`. Run 3 is about 2.2x faster than runs 1 and 2 on the 164 scenarios common to all three (median ratio 2.27; run 1 / run 2 median 1.01), including trivial in-cache queries, and the machine's speed changed inside run 2. This disproves the earlier "filtered vs full run" explanation. The cause (clock/power behaviour, SMT sibling activity, scheduler) was not determined.
+- **Labelled:** `BENCHMARKS.md` marks every explanation as *measured* or *inferred* (no per-structure profiler or hardware counters were used), lists the 14 scenarios of `baseline.csv` with cv above 30%, and gives scaling shapes in both machine states.
+- **Limits of the new data:** raw A/B CSVs have one header line redacted (a local path); the A/B and run-mode experiments are single-machine and small (4-8 rounds); the cause of the two speeds is open.
 
 ## Test results (GCC 16.2.0 / Ninja, `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Werror`, zero warnings)
 
