@@ -258,7 +258,7 @@ TEST(PriceLevelAggregateNeverNegativeThroughChurn) {
 }
 
 
-// ---- reduce() (Phase 5) ------------------------------------------------------
+// ---- reduce() (used by order modification) -----------------------------------
 
 TEST(PriceLevelReduceKeepsPositionAndUpdatesAggregate) {
     PriceLevel level(kPrice);

@@ -6,7 +6,7 @@ left rests in the book. Orders can be cancelled and modified, and every order ke
 history. The project emphasizes correctness evidence (an independent reference model, system-level invariant
 audits, deterministic fault injection) and honest measurement.
 
-- **412 tests in 18 suites**, zero compiler warnings, no external dependencies.
+- **420 tests in 18 suites**, zero compiler warnings, no external dependencies.
 - **Windows** with GCC/MinGW-w64, CMake and Ninja. **Windows 11 is verified; Windows 10 is not verified.** No
   other operating system or compiler has been tried.
 - Released under the [MIT License](LICENSE).
@@ -176,10 +176,10 @@ Type `exit` or `quit` to leave. Closing standard input also exits cleanly.
 build\lob_cli.exe --quiet < commands.txt
 ```
 
-> **Windows encoding caveat.** The CLI does not strip a UTF-8 byte-order mark, so a BOM at the very start of
-> standard input makes the first command fail ("unknown command"). Windows PowerShell 5.1 pipelines to native
-> programs produced such a BOM when tested, and some editors save files with one. Use a plain-ASCII command file
-> with `cmd.exe` redirection as above, or type commands interactively.
+> **Windows encoding note.** Windows PowerShell 5.1 prefixes text piped to a native program with a UTF-8
+> byte-order mark, and some editors save command files with one. The CLI ignores exactly one such mark at the
+> very start of its input (verified with a real PowerShell 5.1 pipe), so `'submit BUY 100 5', 'exit' | .\build\lob_cli.exe --quiet`
+> works. A mark anywhere else, or a second one, is not removed and makes that command fail as an unknown command.
 
 ## Commands
 
@@ -315,7 +315,7 @@ of `lob_cli.exe` as its first argument; CTest supplies it).
 
 | Check | Result |
 |---|---|
-| Tests | **412 tests in 18 suites**, all passing |
+| Tests | **420 tests in 18 suites**, all passing |
 | Release and Debug builds with `-Werror` | 0 warnings; 18/18 suites |
 | UBSan (trap-on-error) and `_GLIBCXX_DEBUG` builds | 18/18 suites, no trap, no abort |
 | Line coverage (gcov, all suites) | 88.35% (`OrderBook.cpp`) to 100% (`Order.cpp`, `Trade.cpp`) across the eight source files |
@@ -386,7 +386,6 @@ CMakeLists.txt  LICENSE  .gitignore  .gitattributes
 - A cancel/replace that runs out of memory part-way can lose the order being modified (it is reported as
   cancelled with reason "internal failure"); see the architecture document for the exact guarantees.
 - A very long input line is rejected, but it is still read into memory first.
-- A UTF-8 byte-order mark at the start of input is not stripped (see the encoding caveat above).
 - With prices and quantities near `INT64_MAX`, adjacent numbers in the `book` table run together (cosmetic).
 - Built and tested with GCC/MinGW-w64 on Windows 11 only; other compilers and operating systems are untested.
 - Performance figures are measurements from one machine whose speed varied by about 2.2x between runs; they are

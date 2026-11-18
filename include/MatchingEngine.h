@@ -53,11 +53,16 @@ public:
     //   DuplicateOrderId  the id is already resting
     //   OrderNotActive    the order is filled / cancelled / rejected
     //   InvalidQuantity   no remaining quantity
+    //   QuantityOverflow  resting the order's quantity at its price could overflow that
+    //                     level's total (checked up front, so a half-executed order is
+    //                     never left unable to rest)
     // Throws std::overflow_error if trade ids would run out (nothing changed).
     ExecutionReport submit(Order incoming);
 
     // Convenience for raw input: validates with Order::validate (invalid id,
-    // price or quantity become a rejected report), then submits a LIMIT order.
+    // price or quantity become a rejected report), then submits a LIMIT order
+    // (so it can also be rejected for the reasons listed above, including
+    // QuantityOverflow).
     ExecutionReport submit(OrderId id, Side side, Price price, Quantity quantity,
                            Sequence sequence);
 
@@ -79,7 +84,9 @@ public:
     // only inside this call, so two orders with one id never coexist.
     // Returns a report with operation MODIFY. Rejected (book unchanged):
     //   OrderNotFound; InvalidPrice / InvalidQuantity (incl. overflow of
-    //   executed + newRemaining). Throws std::overflow_error, with the book
+    //   executed + newRemaining); QuantityOverflow (the new quantity would overflow
+    //   the total of the level it rests at; the order's own old quantity does not
+    //   count if that is the same level). Throws std::overflow_error, with the book
     //   unchanged, if trade ids cannot cover the executions. Strong guarantee for
     //   all of these; see the class comment for allocation failure.
     ExecutionReport replace(OrderId id, Price newPrice, Quantity newRemaining,

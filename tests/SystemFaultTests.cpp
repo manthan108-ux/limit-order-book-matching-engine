@@ -1,10 +1,10 @@
-// System-level fault injection (Phase 7). Its own test executable: it replaces the global
+// System-level fault injection. Its own test executable: it replaces the global
 // operator new exactly like FaultInjectionTests.cpp / CliRecoveryTests.cpp (see
 // FaultInjection.h for the isolation argument), and additionally COUNTS live
 // allocations, so that leaks and double frees on the failure paths are detected.
 //
 // What is checked here is not a hand-written expectation per failure point (the
-// Phase 5.1 suite does that) but the SYSTEM invariants (SystemAuditor.h) after every
+// FaultInjectionTests / CliRecoveryTests do that) but the SYSTEM invariants (SystemAuditor.h) after every
 // injected failure: book integrity, lifecycle <-> book agreement, quantity
 // reconciliation, trade associations, id retirement, transitions, and stale-history
 // accuracy. The reference model is not used here: after an injected failure the

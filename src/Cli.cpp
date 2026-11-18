@@ -5,8 +5,10 @@
 #include <istream>
 #include <limits>
 #include <new>
+#include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace lob {
@@ -149,6 +151,7 @@ int Cli::run(std::istream& in) {
                 "Type 'help' for the commands, 'exit' to leave.\n";
     }
     std::string line;
+    bool firstLine = true;
     while (true) {
         if (options_.showPrompt) {
             out_ << "lob> " << std::flush;
@@ -156,6 +159,13 @@ int Cli::run(std::istream& in) {
         if (!std::getline(in, line)) {  // end of input: a normal way to finish
             if (options_.showPrompt) out_ << "\n";
             break;
+        }
+        // Windows PowerShell 5.1 prefixes piped text with a UTF-8 byte order mark. Strip exactly
+        // that mark, and only at the very start of the input; no other byte is ever dropped.
+        if (firstLine) {
+            firstLine = false;
+            constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
+            if (line.compare(0, kUtf8Bom.size(), kUtf8Bom) == 0) line.erase(0, kUtf8Bom.size());
         }
         if (handleLine(line) == Status::Exit) break;
     }
@@ -221,8 +231,13 @@ void Cli::doSubmit(const ParsedCommand& c) {
     if (!r.accepted) {
         if (r.orderId != 0) {
             out_ << "Order " << r.orderId << ": REJECTED (" << toString(r.rejectReason) << ")\n";
-            // A usable id with a rejected submission is recorded and retired by the manager.
-            if (manager_.knows(r.orderId)) out_ << "  The id is now retired and cannot be reused.\n";
+            // A usable id with a rejected submission is recorded and retired by the manager. Say so
+            // only when THIS rejection created that record: a duplicate names an id that was already
+            // in use (by a live or finished order), so nothing was retired by it.
+            const std::optional<OrderRecord> rec = manager_.order(r.orderId);
+            if (rec && rec->status == OrderStatus::Rejected && rec->rejectReason == r.rejectReason) {
+                out_ << "  The id is now retired and cannot be reused.\n";
+            }
         } else {
             out_ << "Submission REJECTED (" << toString(r.rejectReason) << ")\n";
         }

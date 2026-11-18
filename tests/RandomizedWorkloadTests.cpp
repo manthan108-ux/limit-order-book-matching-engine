@@ -25,7 +25,7 @@ namespace {
 constexpr Side B = Side::Buy;
 constexpr Side S = Side::Sell;
 // The generator itself (profiles, operation mix, RNG call order) lives in
-// WorkloadGenerator.h so the Phase 8 benchmarks time exactly these workloads.
+// WorkloadGenerator.h so the benchmarks time exactly these workloads.
 using workload::Profile;
 using workload::kNarrow;
 using workload::kWide;
@@ -125,7 +125,7 @@ TEST(WorkloadsActuallyExerciseTheInterestingStates) {
 }
 
 TEST(SharedGeneratorOutputIsPinnedToKnownDigests) {
-    // WorkloadGenerator.h is shared with the Phase 8 benchmarks, so a change to the random
+    // WorkloadGenerator.h is shared with the benchmarks, so a change to the random
     // number sequence per step would silently change both the checked and the timed
     // workloads. These digests (trade-stream checksum, trade count, record count) were
     // captured before the generator was extracted from this file and must never change

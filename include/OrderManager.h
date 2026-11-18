@@ -148,6 +148,12 @@ public:
 
     // ---- Operations (each returns an ExecutionReport, see ExecutionReport.h) --
 
+    // Rejections of a submit (either form), see the id policy above for which are
+    // recorded: InvalidSide, InvalidOrderId, DuplicateOrderId, IdSpaceExhausted (no
+    // generated id or sequence number left), InvalidPrice, InvalidQuantity,
+    // TradeIdsExhausted, QuantityOverflow (resting the quantity would overflow the
+    // total of its price level).
+    //
     // Submit with a generated id (reported in the result).
     ExecutionReport submit(Side side, Price price, Quantity quantity);
     // Submit with a client-supplied id.
@@ -162,7 +168,8 @@ public:
     // one value is normally supplied; none, or values equal to the current ones,
     // is a NoChange rejection. Rejections: OrderNotFound, OrderNotActive,
     // InvalidPrice, InvalidQuantity, NoChange, IdSpaceExhausted (sequence
-    // counter), TradeIdsExhausted.
+    // counter), TradeIdsExhausted, QuantityOverflow (the order would overflow the
+    // total quantity of the price level it rests at; the order is left untouched).
     ExecutionReport modify(OrderId id, std::optional<Price> newPrice,
                            std::optional<Quantity> newQuantity);
 

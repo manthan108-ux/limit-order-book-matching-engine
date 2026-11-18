@@ -44,9 +44,10 @@ struct InvariantReport {
 // The resting state of the market: bids and asks as ordered maps of FIFO
 // PriceLevels, plus a global id -> location index.
 //
-// Responsibilities (Phase 3): store, index, cancel and query resting orders.
-// It does NOT match. Crossing orders may rest side by side until the matching
-// engine (Phase 4) is layered on top.
+// Responsibilities: store, index, cancel and query resting orders.
+// It does NOT match. Used on its own, it lets crossing orders rest side by side
+// (a crossed book); the MatchingEngine layered on top matches before resting, so
+// a book it manages is never crossed.
 //
 // Ownership: each PriceLevel owns its orders; the book owns the levels; the
 // lookup stores non-owning list iterators ("handles") into those levels.
@@ -63,7 +64,7 @@ struct InvariantReport {
 //
 // Id policy: ids are unique among orders currently resting. After an order is
 // cancelled its id may be added again. Remembering retired ids is the order
-// manager's concern (Phase 5), not the book's.
+// manager's concern (OrderManager), not the book's.
 //
 // Sequence policy: callers must submit orders with non-decreasing `sequence`
 // values in arrival order; FIFO position within a level is the insertion
@@ -142,8 +143,9 @@ public:
     std::optional<LevelSummary> bestBid() const;
     std::optional<LevelSummary> bestAsk() const;
 
-    // bestAsk - bestBid. Zero or negative only while the book is crossed
-    // (possible until Phase 4 matching exists). nullopt if either side is empty.
+    // bestAsk - bestBid. Zero or negative only if the book is crossed, which can
+    // happen only when orders are added to an OrderBook directly: a book managed by
+    // the MatchingEngine is never crossed. nullopt if either side is empty.
     // Cannot overflow: both prices are positive.
     std::optional<Price> spread() const;
 

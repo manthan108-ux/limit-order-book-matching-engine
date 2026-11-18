@@ -478,7 +478,7 @@ TEST(BookCountsTrackOperations) {
 // ---- Integrity ----------------------------------------------------------
 
 TEST(BookInvariantsHoldOnCrossedBook) {
-    // A crossed book is allowed to exist before Phase 4, and is still consistent.
+    // An OrderBook used on its own does not match, so it can hold a crossed book; it is still consistent.
     OrderBook book;
     book.add(buy(1, 110, 5));
     book.add(sell(2, 100, 5));
@@ -515,7 +515,7 @@ TEST(BookMoveKeepsHandlesValid) {
     CHECK(consistent(b));
 }
 
-// ---- fill() and bestOrder() (added for the matching engine, Phase 4) -----
+// ---- fill() and bestOrder() (used by the matching engine) -----
 
 TEST(BookBestOrderIsOldestAtBestPrice) {
     OrderBook book;
@@ -655,7 +655,7 @@ TEST(BookDeterministicStressMatchesReferenceModel) {
 }
 
 
-// ---- extract() and reduce() (Phase 5) ------------------------------------
+// ---- extract() and reduce() (used by order modification) ------------------
 
 TEST(BookExtractReturnsOrderUnchangedAndFreesTheId) {
     OrderBook book;

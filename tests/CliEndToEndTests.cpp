@@ -304,6 +304,24 @@ TEST(ResultsGoToStdoutAndErrorsToStderrNeverMixed) {
     CHECK_EQ(count(r.err, "error:"), 2u);
 }
 
+// The real executable, fed the bytes Windows PowerShell 5.1 produces when it pipes text: a UTF-8 byte order
+// mark in front of the first line. (Literals are split so a hex escape cannot swallow the next letter.)
+TEST(TheRealCliAcceptsAUtf8ByteOrderMarkOnTheFirstLineOnly) {
+    const Result withBom = session("\xEF\xBB\xBF" "submit BUY 100 5\nsubmit SELL 100 5\ntrades 1\nexit\n");
+    CHECK_EQ(withBom.exitCode, 0);
+    CHECK(withBom.err.empty());
+    CHECK_EQ(count(withBom.out, "ACCEPTED"), 2u);
+    CHECK(has(withBom.out, "Order 1: ACCEPTED"));
+
+    const Result without = session("submit BUY 100 5\nsubmit SELL 100 5\ntrades 1\nexit\n");
+    CHECK(without.err.empty());
+    CHECK(withBom.out == without.out);  // identical behaviour with and without the mark
+
+    const Result later = session("submit BUY 100 5\n\xEF\xBB\xBF" "submit SELL 100 5\nexit\n");
+    CHECK_EQ(count(later.out, "ACCEPTED"), 1u);   // a mark on a later line is NOT removed
+    CHECK(has(later.err, "unknown command"));
+}
+
 TEST(WindowsLineEndingsAndStrayWhitespaceAreAccepted) {
     const Result r = session("  SUBMIT\tbuy   100  10\r\n\tSubmit SELL 100 10  \r\n   \r\ntrades 1\r\nQuit\r\n");
     CHECK_EQ(r.exitCode, 0);

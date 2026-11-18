@@ -27,8 +27,7 @@ else()
   endif()
 endif()
 
-# Core library: domain model + matching logic, no I/O. Source files are added
-# here as later phases introduce them.
+# Core library: domain model + matching logic, no I/O.
 add_library(lob_core STATIC
   src/Order.cpp
   src/Trade.cpp

@@ -1,4 +1,4 @@
-// Phase 5.1 recovery integration for the CLI. Stale bookkeeping can only be produced
+// Recovery integration for the CLI. Stale bookkeeping can only be produced
 // by simulating out-of-memory, so this is its own test executable with the same
 // isolated, deterministic operator new replacement as FaultInjectionTests.cpp (see
 // FaultInjection.h). The injector is armed only around the call under test; the test

@@ -22,7 +22,7 @@ Each suite is its own executable in `build\tests\` and can be run directly. `Cli
 `ctest --test-dir build`, which needs CMake 3.20 (the project file declares 3.14). The MinGW runtime DLLs must be
 found through `PATH`; see "Missing GCC runtime DLLs" in the [README](../README.md#missing-gcc-runtime-dlls).
 
-## Test suites: 412 tests in 18 suites
+## Test suites: 420 tests in 18 suites
 
 Counts are individual `TEST(...)` cases, re-counted per suite from a fresh clone. Randomized and stress tests run
 many operations inside one test case; operation counts are given separately below.
@@ -38,7 +38,7 @@ many operations inside one test case; operation counts are given separately belo
 | OrderManagerTests | 41 | unit | id policy, lifecycle records, modify rules, trade history, consistency audit |
 | FaultInjectionTests | 20 | fault injection | every allocation of each operation failed in turn (see below) |
 | CommandParserTests | 27 | unit | tokenizing, strict number parsing, arity, limits |
-| CliTests | 37 | unit | the real `Cli` and manager through in-memory streams |
+| CliTests | 44 | unit | the real `Cli` and manager through in-memory streams |
 | CliRecoveryTests | 11 | fault injection | stale history, warnings, `recover`, failed trading commands |
 | SystemInvariantTests | 24 | validation | the auditor accepts healthy states and detects each class of corruption |
 | ReferenceModelTests | 20 | validation | the reference model against hand-computed answers, then production against the model |
@@ -46,8 +46,8 @@ many operations inside one test case; operation counts are given separately belo
 | BoundaryTests | 44 | boundary | numeric limits, overflow, matching boundaries, lifecycle boundaries, parser limits |
 | AdversarialTests | 11 | adversarial | long structured sequences (churn, hub orders, 1500 modifications, 8002 orders) |
 | SystemFaultTests | 11 | fault injection | system invariants under injected failures, with allocation accounting |
-| CliEndToEndTests | 16 | end to end | the real `lob_cli.exe` as a subprocess |
-| **Total** | **412** | | |
+| CliEndToEndTests | 17 | end to end | the real `lob_cli.exe` as a subprocess |
+| **Total** | **420** | | |
 
 How the validation layer works (reference model, system auditor, duel harness, fault injector) is documented in
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -60,13 +60,14 @@ CMake 4.4.4; Ninja 1.13.2; Windows 11. Each configuration was built in a clean d
 
 | Configuration | Result |
 |---|---|
-| Release, `-Werror` | 0 warnings; 18/18 suites; **412/412 tests** (about 18 s) |
-| Debug, `-Werror` | 0 warnings; 18/18 suites (about 59 s) |
+| Release, `-Werror` | 0 warnings; 18/18 suites; **420/420 tests** (about 18 s) |
+| Debug, `-Werror` | 0 warnings; 18/18 suites; **420/420 tests** (about 56 s) |
 | Release + UBSan in trap-on-error mode (`-fsanitize=undefined -fsanitize-undefined-trap-on-error -fno-sanitize-recover=all`), `-Werror` | 0 warnings; 18/18 suites, no trap |
 | Debug + `_GLIBCXX_DEBUG` and `_GLIBCXX_DEBUG_PEDANTIC` (checked containers and iterators) | 18/18 suites, no abort |
 
-The 412-test count was taken per suite in Release. The other configurations were checked at suite level (18/18
-pass in each) and were not individually re-counted. Release-without-`-Werror` is the default build and also
+The 420-test count was taken per suite in Release and in Debug. The UBSan and `_GLIBCXX_DEBUG` rows were last run
+when the suite had 412 tests (before the byte-order-mark and duplicate-id changes added 8) and were **not** re-run
+since; they are not evidence about the newer tests. Release-without-`-Werror` is the default build and also
 produces 0 warnings.
 
 ## Line coverage (gcov, Debug, all 18 suites)
@@ -206,9 +207,9 @@ recorded as a development-time result, not a reproducible one.
 - **End-to-end limits.** The CLI end-to-end suite cannot produce stale history in the real executable (it needs
   simulated memory exhaustion); recovery is covered in-process by `CliRecoveryTests` and, through the `recover`
   command on a healthy session, end to end.
-- **Input encoding.** The CLI does not strip a UTF-8 byte-order mark. A BOM at the start of standard input (as
-  written by some editors, or piped by Windows PowerShell 5.1) becomes part of the first token and that first
-  command is rejected. No test covers this; it was observed manually.
+- **Input encoding.** The CLI ignores one UTF-8 byte-order mark at the very start of its input (as piped by
+  Windows PowerShell 5.1) and nothing else; marks elsewhere are rejected as part of an unknown command. This is
+  tested in `CliTests` and `CliEndToEndTests`, and was also checked once with a real PowerShell 5.1 pipe.
 - **Bounded workloads.** The largest randomized workload is 6,000 steps per seed, kept small enough for routine
   runs.
 - **No performance claim** beyond the measurements in [BENCHMARKS.md](BENCHMARKS.md), which come from one

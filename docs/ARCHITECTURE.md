@@ -623,9 +623,10 @@ flowchart TD
 - `depth` accepts 1 to 1000 (`kMaxDepthLevels`).
 - A line longer than 1024 characters (`kMaxLineLength`) is rejected without being parsed. `std::getline` still
   reads the whole line first, which is a known limitation.
-- **A UTF-8 byte-order mark is not stripped.** A BOM at the start of standard input becomes part of the first
-  token, so that first command is rejected as an unknown command. This was observed with a BOM-prefixed file
-  redirected from `cmd.exe` and with Windows PowerShell 5.1 pipelines; there is no test for it.
+- **One leading UTF-8 byte-order mark is ignored.** `Cli::run` removes exactly the three bytes `EF BB BF` from
+  the start of the first input line, because Windows PowerShell 5.1 prefixes piped text with them. A mark
+  anywhere else (a later line, mid-line, after other characters, or a second one) is not removed and is rejected
+  as part of an unknown command. Covered by `CliTests` and, with the real executable, by `CliEndToEndTests`.
 - Syntax errors go to `stderr` and the session continues. Business rejections are normal results on `stdout`. EOF
   exits cleanly like `exit`. `Cli::handleLine` / `execute` / `run` never throw.
 

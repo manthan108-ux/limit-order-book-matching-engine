@@ -88,6 +88,61 @@ TEST(SubmitDuplicateIdIsABusinessRejectionNotAnError) {
     CHECK(consistent(h.manager));
 }
 
+TEST(DuplicateIdOfALiveOrderIsRejectedWithoutClaimingItWasRetired) {
+    Harness h;
+    h.run("submit BUY 100 50 7");
+    const OrderRecord before = *h.manager.order(7);
+    const std::size_t recordedBefore = h.manager.recordedOrderCount();
+
+    const std::string o = h.run("submit SELL 90 10 7");  // would trade if it were accepted
+    CHECK(has(o, "Order 7: REJECTED (duplicate order id)"));
+    CHECK(!has(o, "retired"));  // nothing was retired: id 7 belongs to a live order
+    CHECK(h.errors().empty());
+
+    // The original order is exactly as it was and still resting; nothing else changed.
+    const OrderRecord after = *h.manager.order(7);
+    CHECK(after.status == OrderStatus::New);
+    CHECK_EQ(after.price, before.price);
+    CHECK_EQ(after.side == before.side, true);
+    CHECK_EQ(after.sequence, before.sequence);
+    CHECK_EQ(after.submittedQuantity, before.submittedQuantity);
+    CHECK_EQ(after.remainingQuantity, before.remainingQuantity);
+    CHECK_EQ(after.executedQuantity, before.executedQuantity);
+    CHECK_EQ(after.tradeIndices.size(), 0u);
+    CHECK(h.manager.book().contains(7));
+    CHECK_EQ(h.manager.book().find(7)->remainingQuantity(), 50);
+    CHECK_EQ(h.manager.recordedOrderCount(), recordedBefore);
+    CHECK_EQ(h.manager.trades().size(), 0u);
+    CHECK(consistent(h.manager));
+}
+
+TEST(DuplicateIdOfAFinishedOrderDoesNotClaimARetirementEither) {
+    Harness h;
+    h.run("submit BUY 100 5 7");
+    h.run("cancel 7");
+    const std::string o = h.run("submit BUY 100 5 7");
+    CHECK(has(o, "Order 7: REJECTED (duplicate order id)"));
+    CHECK(!has(o, "retired"));
+    CHECK(h.manager.order(7)->status == OrderStatus::Cancelled);
+    CHECK(consistent(h.manager));
+}
+
+TEST(AnIdRetiredByARejectedSubmissionIsStillReportedAsRetired) {
+    Harness h;
+    const std::string maxQty = std::to_string(std::numeric_limits<Quantity>::max());
+    h.run("submit BUY 100 " + maxQty);  // fills level 100 up to the type's limit
+    // One more unit at that price cannot rest: rejected, and its generated id is recorded and retired.
+    const std::string o = h.run("submit BUY 100 1");
+    CHECK(has(o, "Order 2: REJECTED"));
+    CHECK(has(o, "The id is now retired and cannot be reused."));
+    CHECK(h.manager.order(2)->status == OrderStatus::Rejected);
+    // Submitting that id again is a duplicate: rejected, and nothing new is retired.
+    const std::string again = h.run("submit BUY 100 1 2");
+    CHECK(has(again, "Order 2: REJECTED (duplicate order id)"));
+    CHECK(!has(again, "retired"));
+    CHECK(consistent(h.manager));
+}
+
 TEST(SubmitCrossingShowsTradesAndFinalState) {
     Harness h;
     h.run("submit SELL 105 20");
@@ -490,6 +545,94 @@ TEST(WindowsLineEndingsAreAccepted) {
     CHECK_EQ(manager.trades().size(), 1u);
     CHECK(err.str().empty());
 }
+
+// Windows PowerShell 5.1 prefixes piped text with a UTF-8 byte order mark (EF BB BF). Only that mark, only at
+// the very start of the input, is ignored. (Literals are split so a hex escape cannot swallow the next letter.)
+#define BOM "\xEF\xBB\xBF"
+
+TEST(ALeadingUtf8BomBeforeTheFirstCommandIsIgnored) {
+    OrderManager manager;
+    std::ostringstream out, err;
+    Cli cli(manager, out, err, Cli::Options{false});
+    std::istringstream in(BOM "submit BUY 100 10\nsubmit SELL 100 10\nexit\n");
+    CHECK_EQ(cli.run(in), 0);
+    CHECK_EQ(manager.recordedOrderCount(), 2u);
+    CHECK_EQ(manager.trades().size(), 1u);
+    CHECK(err.str().empty());
+    CHECK(consistent(manager));
+}
+
+TEST(TheSameScriptWithoutABomBehavesIdentically) {
+    OrderManager manager;
+    std::ostringstream out, err;
+    Cli cli(manager, out, err, Cli::Options{false});
+    std::istringstream in("submit BUY 100 10\nsubmit SELL 100 10\nexit\n");
+    CHECK_EQ(cli.run(in), 0);
+    CHECK_EQ(manager.recordedOrderCount(), 2u);
+    CHECK_EQ(manager.trades().size(), 1u);
+    CHECK(err.str().empty());
+}
+
+TEST(ABomOnTheFirstLineAloneOrBeforeABlankFirstLineIsHarmless) {
+    OrderManager manager;
+    std::ostringstream out, err;
+    Cli cli(manager, out, err, Cli::Options{false});
+    std::istringstream in(BOM "\nsubmit BUY 100 10\n");  // BOM, then an empty command line
+    CHECK_EQ(cli.run(in), 0);
+    CHECK_EQ(manager.recordedOrderCount(), 1u);
+    CHECK(err.str().empty());
+}
+
+TEST(ABomAnywhereElseIsNotSilentlyStripped) {
+    {   // on a later line
+        OrderManager manager;
+        std::ostringstream out, err;
+        Cli cli(manager, out, err, Cli::Options{false});
+        std::istringstream in("submit BUY 100 10\n" BOM "submit SELL 100 10\n");
+        cli.run(in);
+        CHECK_EQ(manager.recordedOrderCount(), 1u);  // the second line was NOT executed
+        CHECK_EQ(manager.trades().size(), 0u);
+        CHECK(has(err.str(), "unknown command"));
+    }
+    {   // in the middle of the first line
+        OrderManager manager;
+        std::ostringstream out, err;
+        Cli cli(manager, out, err, Cli::Options{false});
+        std::istringstream in("submit " BOM "BUY 100 10\n");
+        cli.run(in);
+        CHECK_EQ(manager.recordedOrderCount(), 0u);
+        CHECK(!err.str().empty());
+    }
+    {   // after other leading characters on the first line
+        OrderManager manager;
+        std::ostringstream out, err;
+        Cli cli(manager, out, err, Cli::Options{false});
+        std::istringstream in(" " BOM "submit BUY 100 10\n");
+        cli.run(in);
+        CHECK_EQ(manager.recordedOrderCount(), 0u);
+        CHECK(has(err.str(), "unknown command"));
+    }
+    {   // only ONE mark is removed from the start; a second one stays and makes the command invalid
+        OrderManager manager;
+        std::ostringstream out, err;
+        Cli cli(manager, out, err, Cli::Options{false});
+        std::istringstream in(BOM BOM "submit BUY 100 10\n");
+        cli.run(in);
+        CHECK_EQ(manager.recordedOrderCount(), 0u);
+        CHECK(has(err.str(), "unknown command"));
+    }
+    {   // an incomplete mark (two of its three bytes) is not a BOM
+        OrderManager manager;
+        std::ostringstream out, err;
+        Cli cli(manager, out, err, Cli::Options{false});
+        std::istringstream in("\xEF\xBB" "submit BUY 100 10\n");
+        cli.run(in);
+        CHECK_EQ(manager.recordedOrderCount(), 0u);
+        CHECK(has(err.str(), "unknown command"));
+    }
+}
+
+#undef BOM
 
 TEST(PromptAndBannerAppearOnlyWhenEnabled) {
     OrderManager manager;

@@ -160,7 +160,7 @@ TEST(OrderQuantityInvariantAcrossFills) {
 }
 
 
-// ---- Amendments (Phase 5) ----------------------------------------------------
+// ---- Amendments (used by order modification) ---------------------------------
 
 TEST(OrderReduceToKeepsExecutedAndAdjustsOriginal) {
     Order o = makeOrder(100);

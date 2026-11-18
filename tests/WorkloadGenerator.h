@@ -1,6 +1,6 @@
 #pragma once
-// The Phase 7 seeded workload generator, shared by the randomized correctness tests
-// (RandomizedWorkloadTests.cpp, where the target is a Duel) and the Phase 8 benchmarks
+// The seeded workload generator, shared by the randomized correctness tests
+// (RandomizedWorkloadTests.cpp, where the target is a Duel) and the benchmarks
 // (benchmarks/, where the target records and replays the operations), so that the
 // workloads that are checked for correctness and the workloads that are timed come from
 // ONE generator and are comparable.
