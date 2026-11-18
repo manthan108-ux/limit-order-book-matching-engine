@@ -1,4 +1,4 @@
-# Preserved A/B data for the rejected Phase 8 optimization candidate
+# Preserved A/B data for the rejected optimization candidate
 
 This directory holds the raw output of the interleaved A/B experiment described in
 [BENCHMARKS.md](../../BENCHMARKS.md) section 8. The candidate was **reverted**; nothing here changes
@@ -8,7 +8,7 @@ production behaviour. The data is kept so the numbers quoted in BENCHMARKS.md ca
 
 | | |
 |---|---|
-| A, baseline | `lob_bench` built from the unmodified Phase 7 production code (`f125d84`; `src/` and `include/` are byte-identical to the Phase 8 commit `f697bc3`). SHA-256 `851f8767...b519f08` |
+| A, baseline | `lob_bench` built from the unmodified production code of commit `f125d84` (`src/` and `include/` are still byte-identical to it). SHA-256 `851f8767...b519f08` |
 | B, candidate | the same harness plus one change to `src/MatchingEngine.cpp`. SHA-256 `e672412e...a55e2a24` |
 | Control | a byte-identical copy of A (same SHA-256 as A), used to measure how far two runs of the same binary differ |
 

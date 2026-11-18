@@ -1,7 +1,24 @@
 # Benchmarks
 
-Phase 8 measures the matching engine as it was at commit `f125d84` (production code unchanged by this
-phase). This is measured performance on one machine, **not a production-readiness certification**.
+This document describes the benchmark suite and what it measured on the production code of commit `f125d84`
+(`src/` and `include/` are still byte-identical to that commit). It is measured performance on **one Windows 11
+laptop with one compiler**, not a production-readiness certification.
+
+## Summary: read this before using any number
+
+- **158 scenarios** are measured (158 scenarios produce 164 CSV rows, because each of the three mixed workloads
+  has three per-operation-kind latency rows).
+- **The machine ran at two speeds.** The same unmodified binary, with the same command line, was about
+  **2.2x slower** in two full runs than in a third. Across the 158 scenarios, the slow-to-fast ratio has a
+  median of **2.26** (10th-90th percentile **1.89-2.49**; section 9.1). The speed also changed *inside* one run.
+  The cause is not determined.
+- **Therefore absolute numbers are state-dependent**; every headline table below shows both states. Shapes
+  (scaling curves, the cost of replace-style modify, the flat cost of cancelling at any queue length) held in both
+  states where they were checked. Ratios moved by up to about 25%.
+- **Measured versus inferred.** *Measured* means a number in a committed CSV. *Inferred* means an explanation that
+  no experiment in this repository tests. No profiler or hardware counter was used, so the attribution of time to
+  `std::list`, `std::map` or hash-table behaviour is inferred, not measured (section 7).
+- **One optimization was tried and rejected** (section 8); no production code was changed for the benchmarks.
 
 ## 1. What is measured
 
@@ -16,7 +33,7 @@ The difference between layers is the cost of that layer; it is not an estimate, 
 
 | Group | Scenarios |
 |---|---|
-| `core` | resting submit; cancel at best/middle/worst queue position; cancel at best/worst price level; random cancel; modify (qty decrease in place, qty increase, price change); matching one-to-one / one-to-many / many-to-one / multi-level; best bid/ask/spread/mid; depth(1/5/20/100); order lookup (book and manager); mixed workloads from the Phase 7 generator (narrow, wide, mixed profiles) |
+| `core` | resting submit; cancel at best/middle/worst queue position; cancel at best/worst price level; random cancel; modify (qty decrease in place, qty increase, price change); matching one-to-one / one-to-many / many-to-one / multi-level; best bid/ask/spread/mid; depth(1/5/20/100); order lookup (book and manager); mixed workloads from the seeded workload generator that the correctness tests also use (narrow, wide, mixed profiles) |
 | `scale-active` | resting submit, random cancel, lookup, bestBid, depth(10) at 1k / 10k / 100k / 250k active orders |
 | `scale-levels` | the same at 100k orders spread over 1 / 10 / 100 / 1k / 10k / 50k price levels per side |
 | `scale-perlevel` | cancel cost against queue length 100 / 1k / 10k / 50k at one level |
@@ -26,23 +43,26 @@ The difference between layers is the cost of that layer; it is not an estimate, 
 158 scenarios in total (`lob_bench --list`). Workload sizes are in the `params` column of
 `docs/benchmarks/baseline.csv` (for example `preload=100000;levels=1000;ops=50000`).
 
-The mixed workloads reuse the Phase 7 seeded generator (`tests/WorkloadGenerator.h`). The generator was
-extracted from `RandomizedWorkloadTests.cpp` without changing its output: twelve (digest, trades, records)
-tuples are pinned by the test `SharedGeneratorOutputIsPinnedToKnownDigests`, and they were identical
-before and after the extraction.
+The mixed workloads use the seeded generator in `tests/WorkloadGenerator.h`, which `RandomizedWorkloadTests.cpp`
+also uses, so the benchmarks time exactly the workloads the correctness tests validate. Twelve (digest, trades,
+records) tuples are pinned by the test `SharedGeneratorOutputIsPinnedToKnownDigests`; a change to the generator's
+random-number call order fails that test.
 
 ## 2. Methodology
 
-- Clock: `std::chrono::steady_clock`. On this machine its tick is **100 ns** and one call costs about
-  **185 ns**, so a single fast operation cannot be timed individually.
+- Clock: `std::chrono::steady_clock`. On this machine its tick is **100 ns**, and the cost of one call, measured
+  at start-up of each run, was **184.8 ns, 44.2 ns and 39.9 ns** in full runs 1, 2 and 3 (the `clock_call_overhead`
+  header line of each CSV). That spread is itself an instance of the machine-state effect of section 9.1. Either
+  way a single fast operation cannot be timed individually.
 - **Throughput** (ops/s): one timed region per repetition containing only the operations, with no timing
   calls inside. Reported as median, min, max and coefficient of variation over **21 repetitions** after
   **2 discarded warm-up runs**. Each repetition rebuilds its state outside the timed region unless the
   scenario is read-only.
-- **Latency**: per-operation timing only when an operation takes at least 2000 ns (otherwise the 185 ns
-  timer cost and 100 ns quantization dominate). Cheaper operations are timed in batches of about 20 us
-  and the table reports percentiles of **batch means**, labelled `bm`. A batch-mean p99 is not a
-  per-operation p99; it hides single-operation outliers. Latency passes are pooled over 3 repetitions.
+- **Latency**: per-operation timing only when an operation takes at least 2000 ns (otherwise the timer cost, up
+  to about 185 ns, and the 100 ns quantization dominate; the timer cost is included in per-operation samples,
+  not subtracted). Cheaper operations are timed in batches of about 20 us and the tables report percentiles of
+  **batch means** (`batch_mean` in the CSV). A batch-mean p99 is not a per-operation p99; it hides
+  single-operation outliers. Latency passes are pooled over 3 repetitions.
 - Pre-generated operation streams: random workloads are recorded once (by running the shared generator
   against a scratch `OrderManager`) and replayed, so generator cost is never in a timed region.
 - **Correctness is checked outside every timed region**: the book's `checkInvariants`, the manager's
@@ -53,15 +73,30 @@ before and after the extraction.
 - Fixed seeds everywhere (`seed=20260601` for mixed workloads).
 - The thread is pinned to logical CPU 2 (`--pin 2`).
 
+### Command-line options and the Windows-specific ones
+
+`lob_bench [--quick] [--reps N] [--warmup N] [--lat-reps N] [--no-latency] [--group NAME] [--filter TEXT]
+[--csv FILE] [--pin CPU] [--list]` (`lob_bench --help`). Groups: `core`, `scale-active`, `scale-levels`,
+`scale-perlevel`, `scale-matching`, `scale-cancelmodify`.
+
+| Option or output | Windows-specific? |
+|---|---|
+| `--pin CPU` | **Yes.** Uses `SetThreadAffinityMask`, so it accepts logical CPUs 0-63. It is implemented only for Windows; elsewhere the source returns "not pinned". |
+| `ram_gb` in the machine header | **Yes.** Read with `GlobalMemoryStatusEx`; it is 0 where that API is unavailable. |
+| `cpu` in the machine header | No source-level dependence on Windows; it is read with the x86 `cpuid` instruction. |
+| `--quick`, `--reps`, `--warmup`, `--lat-reps`, `--no-latency`, `--group`, `--filter`, `--csv`, `--list` | No. |
+
+This project documents and supports Windows only, so these are described for completeness.
+
 ## 3. Environment
 
 | | |
 |---|---|
 | CPU | 13th Gen Intel Core i7-13620H (hybrid: P-cores and E-cores), 16 logical CPUs |
 | RAM | 15.6 GB |
-| OS | Windows 11 Home (10.0.26200) |
-| Compiler | GCC 16.2.0 (WinLibs MinGW-w64), `-O3 -DNDEBUG`, build type Release |
-| Build | CMake + Ninja |
+| OS | Windows 11 Home Single Language, version 10.0.26200 |
+| Compiler | GCC 16.2.0 (WinLibs MinGW-w64, UCRT, POSIX threads), `-O3 -DNDEBUG`, build type Release |
+| Build | CMake 4.4.4 and Ninja 1.13.2 (both bundled with the WinLibs package) |
 
 The CPU is hybrid: E-cores ran roughly 2-3x slower than P-cores in early unpinned runs, which is why every
 reported run is pinned to a P-core. Laptop power and thermal state were not controlled.
@@ -84,15 +119,21 @@ reported run is pinned to a P-core. Laptop power and thermal state were not cont
 counters, no per-structure profiler was used). Inferred statements are marked as such and should be treated
 as hypotheses.
 
-Reproduce:
+Reproduce (Windows 11 verified, Windows 10 not verified; PowerShell or `cmd.exe`, from the repository root; Release is the default build type,
+and a non-optimized build of `lob_bench` refuses to run):
 
 ```
-cmake -S . -B build-rel -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-rel
-build-rel/benchmarks/lob_bench --pin 2 --csv out.csv        # full run, about 7 minutes
-build-rel/benchmarks/lob_bench --quick                      # 20x smaller smoke test, ~2 s
-build-rel/benchmarks/lob_alloc_profile --csv alloc.csv
+cmake -S . -B build -G Ninja
+cmake --build build
+.\build\benchmarks\lob_bench.exe --quick                         # 20x smaller smoke test, a few seconds
+.\build\benchmarks\lob_bench.exe --pin 2 --csv results.csv       # full run, about 7 minutes
+.\build\benchmarks\lob_alloc_profile.exe --csv alloc.csv         # allocation counts
 ```
+
+The reference runs used `--pin 2`; choose a logical CPU appropriate for your processor. `results.csv` and
+`alloc.csv` at the repository root are ignored by `.gitignore` (committed evidence lives under
+`docs/benchmarks/`). Expect different absolute numbers, and see section 9 for why even repeated runs on one
+machine can differ by about 2.2x.
 
 ## 5. Baseline results (median ns/op, 100k resting orders over 1000 levels unless noted)
 
@@ -120,9 +161,9 @@ whole run was in one state, gives a usable layer split: book 182, engine 245, ma
 | modify, quantity decrease (in place) | 454 / 203 |
 | modify, quantity increase (replace) | 1310 / 655 |
 | modify, price change (replace) | 1190 / 647 |
-| mixed Phase 7 stream, narrow | 676 / 289 |
-| mixed Phase 7 stream, wide | 736 / 317 |
-| mixed Phase 7 stream, mixed | 705 / 308 |
+| mixed workload stream, narrow | 676 / 289 |
+| mixed workload stream, wide | 736 / 317 |
+| mixed workload stream, mixed | 705 / 308 |
 | `bestBid` | 2.75 / 1.20 |
 | `spread` | 3.38 / 1.48 |
 | `depth(100)` | 1930 / 864 |
@@ -130,7 +171,7 @@ whole run was in one state, gives a usable layer split: book 182, engine 245, ma
 | `manager.order` | 67.4 / 28.0 |
 
 Throughput is the reciprocal of the median: in run 2 manager resting submit is about 1.2 Mop/s, random cancel
-about 1.3 Mop/s and the mixed Phase 7 stream about 1.4 Mop/s; in run 3 about 2.6, 2.4 and 3.2-3.5 Mop/s.
+about 1.3 Mop/s and the mixed workload stream about 1.4 Mop/s; in run 3 about 2.6, 2.4 and 3.2-3.5 Mop/s.
 Ratios between rows move less than the absolute values do, but they are not constant either:
 replace-modify / in-place modify is 2.6x in run 2 and 3.2x in run 3, and random / queue-order cancel at the
 manager layer is 6.7x and 8.0x. Quote a ratio as a range across states, not as a single number.
@@ -138,7 +179,7 @@ manager layer is 6.7x and 8.0x. Quote a ratio as a range across states, not as a
 **Latency** (manager layer; `lat_method` column of `baseline.csv`). Batch means (`batch_mean`): resting
 submit p50 675 ns / p95 1.26 us / p99 5.38 us; random cancel p50 726 ns / p95 804 ns / p99 1.43 us;
 price-change modify p50 1.16 us / p95 1.53 us / p99 2.33 us; one-to-one match p50 548 ns / p95 878 ns /
-p99 3.60 us. The mixed Phase 7 streams are timed per operation (`per_op`, quantized to 100 ns) and reported per
+p99 3.60 us. The mixed workload streams are timed per operation (`per_op`, quantized to 100 ns) and reported per
 operation kind (`lat_group` column); narrow profile:
 
 | Kind | p50 | p95 | p99 |
@@ -148,10 +189,8 @@ operation kind (`lat_group` column); narrow profile:
 | modify | 300 ns | 1000 ns | 1700 ns |
 
 (wide: submit 700 / 1800 / 5500, cancel 300 / 600 / 800, modify 300 / 1300 / 1600 ns; mixed: submit
-600 / 1800 / 5300, cancel 300 / 600 / 700, modify 300 / 1100 / 1500 ns.) An earlier revision of this file
-quoted a single "mixed narrow" latency of 1.02 / 1.51 / 2.36 us; those figures were mis-attributed (they are the
-resting-submit batch-mean percentiles at 100k orders over 10k levels) and are corrected here.
-*Inferred, not measured:* the large p99 of submit and match is probably batches that include a hash-table
+600 / 1800 / 5300, cancel 300 / 600 / 700, modify 300 / 1100 / 1500 ns; per-operation figures are quantized to
+100 ns.) *Inferred, not measured:* the large p99 of submit and match is probably batches that include a hash-table
 rehash or an allocator slow path; nothing here confirms it.
 
 ## 6. Scaling observations
@@ -210,8 +249,8 @@ committed and cannot be reproduced from the repository.
    machine state (run 3), 182 ns at the book layer, 245 ns at the engine layer and 391 ns at the manager
    layer: the engine adds about 63 ns and the manager a further 146 ns. In run 2 the engine and manager
    figures are 548 and 843 ns (a further 295 ns for the manager, about 2.0x run 3, consistent with the global
-   2.2x shift) but its book figure was measured in a different state and gives a misleading "365 ns" engine
-   overhead; an earlier revision of this file quoted that. Other sizes are in the `scale-*` groups.
+   2.2x shift) but its book figure was measured in a different machine state, so subtracting it would give a
+   misleading "365 ns" engine overhead. Other sizes are in the `scale-*` groups.
 2. Replace-style modify (price change, quantity increase) costs 2.6-2.9x an in-place decrease in run 2
    (1189 / 1309 vs 454 ns) and 3.2x in run 3 (647 / 655 vs 203 ns).
 3. Random-order cancel costs about 6.7x (run 2: 747 vs 112 ns) to 8.0x (run 3: 411 vs 51 ns) a cancel in queue
@@ -261,7 +300,7 @@ of the mean of per-process medians; "rounds won" counts rounds in which the cand
 | resting submit, book layer (code unchanged, so a noise control) | 1.07, 1.01, 0.99 (min-based 1.00 in all three) | 2/4, 2/4, 5/6 | same |
 | match one-to-one, engine / manager layer | 1.05 / 1.01 | 1/8, 4/8 | `isolated_match_one_to_one` |
 | match many-to-one, engine / manager layer | 1.07 / 1.00 | 4/8, 4/8 | `isolated_match_many_to_one` |
-| mixed Phase 7 stream (narrow / wide / mixed) | 1.02 / 0.93 / 0.96 | 1/8, 7/8, 2/8 | `isolated_mixed_phase7` |
+| mixed workload stream (narrow / wide / mixed) | 1.02 / 0.93 / 0.96 | 1/8, 7/8, 2/8 | `isolated_mixed_phase7` |
 
 How large is the noise these ratios must beat? In the `submit_resting` set the **unchanged** book layer
 ranges 0.84-1.07 (min-based 0.87-1.01) across sizes, and an identical binary compared with itself
@@ -275,7 +314,7 @@ runs (about 13-14% at the manager layer, 16-17% at the engine layer), but it doe
 mixed workloads (+2%, -7%, -4% with inconsistent rounds, not distinguishable from noise), the engine-layer
 matching scenarios measured 5-7% slower (8-round sets, 1 and 4 of 8 rounds won), and the change moves a
 rejection path into `execute()`. That does not meet the bar of a repeatable, meaningful improvement without
-added complexity. **No production code was changed in Phase 8; the baseline is the final measurement.**
+added complexity. **No production code was changed for the benchmarks; the baseline is the final measurement.**
 This is a judgement call, not a result that settles the question: the gain is real in the scenario it targets.
 
 **The two long `--group core` A/B runs are confounded and are not used as evidence.** In both, scenarios the
@@ -285,18 +324,19 @@ change cannot touch were slower with the candidate: in `core_run1_CONFOUNDED` `m
 0.91-1.02). Short isolated reruns were then made. The isolated sets that survive show **no uniform offset but
 substantial noise** (`isolated_cancel_in_queue_book` 0.96-1.14 by median, 0.98-1.03 by min;
 `isolated_match` 0.87-1.22 by median, 0.90-1.10 by min). The isolated `market_data` / `modify` /
-`cancel_modify_frequency` runs, which I had summarised as "about 1.0", were overwritten and survive only as a
-console readout (market_data 0.92-1.21 with no consistent direction; modify 0.96-1.06; cancel_modify_frequency
-0.87-0.97), so that summary overstated how clean they were. The cause of the offset in the long runs is
-unknown (section 9).
+`cancel_modify_frequency` runs were overwritten and survive only as a console readout (market_data 0.92-1.21
+with no consistent direction; modify 0.96-1.06; cancel_modify_frequency 0.87-0.97). That readout is not
+evidence of "about 1.0": it was noisier than that. The cause of the offset in the long runs is unknown
+(section 9).
 
 ## 9. Variability: the machine-state discrepancy and high-CV scenarios
 
 ### 9.1 The same binary runs at two speeds (measured; cause not determined)
 
-An earlier revision of this file said the difference between short filtered runs and full-suite runs of the
-same binary was a "run-mode" effect. **That was wrong.** Controlled tests (all on the unmodified baseline
-binary, pinned to CPU 2, raw files in `docs/benchmarks/` and `docs/benchmarks/runmode/`) show:
+A natural first explanation for the speed difference between short filtered runs and full-suite runs of the
+same binary is a "run-mode" effect (the filter, the latency pass, the repetition count). **It was tested and
+rejected.** Controlled tests (all on the unmodified baseline binary, pinned to CPU 2, raw files in
+`docs/benchmarks/` and `docs/benchmarks/runmode/`) show:
 
 | Invocation | `cancel_in_queue` book, queue 50k, oldest-first (ns/op, median) | `bestBid` (ns) | mixed narrow (ns/op) |
 |---|---:|---:|---:|
@@ -316,9 +356,11 @@ What this shows:
 - **Not a run-mode effect.** A complete default run (run 3) is as fast as the filtered and group-only runs; the
   two slow full runs were slow for a reason that is not the flags, the filter, the latency pass, the
   repetition count or running the whole suite.
-- **A uniform factor, not a software effect.** Across the 164 scenarios present in all three full runs,
-  run 2 / run 3 has a median of 2.27 (10th-90th percentile 1.90-2.48, min 0.96, max 3.04), while run 1 / run 2
-  has a median of 1.01 (0.96-1.12). Even a read-only, cache-resident query (`bestBid`) is 2.3x slower
+- **A uniform factor, not a software effect.** Across the **158 scenarios** present in all three full runs
+  (the 164 CSV rows contain six duplicate keys for the per-kind latency rows of the mixed workloads, which are
+  counted once here), the ratio run 2 / run 3 has a median of **2.26** (10th-90th percentile **1.89-2.49**,
+  min 0.96, max 3.04), while run 1 / run 2 has a median of 1.01 (10th-90th percentile 0.95-1.14, min 0.77,
+  max 2.31). Even a read-only, cache-resident query (`bestBid`) is 2.3x slower
   (2.75 vs 1.20 ns), as is `depth(100)` (1927 vs 864 ns). *Inferred:* a factor that touches code with no
   memory or allocator dependence is a property of the machine (clock speed or CPU sharing), not of the
   engine's data structures.
@@ -330,7 +372,10 @@ What this shows:
   10%; run 2 has 14 and 26.
 - **A smaller, separate effect.** The nine filtered `cancel_in_queue` runs sit at 53-56 ns, about 1.3x the
   40-48 ns of the group-level and unfiltered runs for the same scenario. This is consistent across all nine
-  and I did not investigate it.
+  and was not investigated.
+- **The timer itself shows the state.** The `clock_call_overhead` recorded at start-up was 184.8 ns in run 1,
+  44.2 ns in run 2 and 39.9 ns in run 3. Run 2 therefore started in the fast state, which agrees with its first
+  scenario matching run 3 before the machine slowed (the bullet above).
 
 *Not determined, not tested:* what causes the two states. Plausible candidates are laptop CPU frequency /
 power-limit / thermal behaviour, activity on the SMT sibling hyperthread of CPU 2, and the Windows power plan
@@ -354,8 +399,8 @@ Consequences for how to read this document:
 
 ### 9.2 High-CV scenarios
 
-`cv` is the standard deviation divided by the mean of the per-repetition ns/op, in percent. Of 164 scenario
-rows, `baseline.csv` has **39 with cv above 5%, 26 above 10% and 14 above 30%**; `baseline_run1.csv` has 9 above
+`cv` is the sample standard deviation divided by the mean of the per-repetition ns/op, in percent. Of the 164
+CSV rows (158 scenarios), `baseline.csv` has **39 with cv above 5%, 26 above 10% and 14 above 30%**; `baseline_run1.csv` has 9 above
 30%; `baseline_run3.csv` has 19 above 30% and 89 above 10%. The 14 rows of `baseline.csv` above 30%:
 
 | cv | Scenario | Variant | Params | median / min / max (ns/op) |
@@ -388,7 +433,8 @@ sequence that includes a high-CV row.
 
 ## 10. Limitations and caveats
 
-- One machine, one compiler, one OS. No Clang/MSVC/Linux numbers and no comparison across builds.
+- One machine, one compiler, one OS (Windows 11, GCC/MinGW-w64). No other compiler or operating system was
+  measured, and no comparison across builds.
 - Hybrid CPU with uncontrolled laptop power and thermal state; results were pinned to a P-core but not
   frequency-locked, and the machine showed two speeds about 2.2x apart (section 9.1) whose cause was not
   determined. Absolute numbers should be read as one state's values, not as properties of the engine.
