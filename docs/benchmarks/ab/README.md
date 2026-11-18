@@ -8,7 +8,7 @@ production behaviour. The data is kept so the numbers quoted in BENCHMARKS.md ca
 
 | | |
 |---|---|
-| A, baseline | `lob_bench` built from the unmodified production code of commit `f125d84` (the `lob_core` code it measures is unchanged; later commits changed only header comments and `src/Cli.cpp`, which the benchmarks do not use). SHA-256 `851f8767...b519f08` |
+| A, baseline | `lob_bench` built from the unmodified production code of commit `f125d84`. The benchmarked `lob_core` implementation remains code-identical to the baseline at commit `f125d84`. Subsequent changes to the CLI layer, comments, build configuration and tests do not alter the implementation measured by `lob_bench`. SHA-256 `851f8767...b519f08` |
 | B, candidate | the same harness plus one change to `src/MatchingEngine.cpp`. SHA-256 `e672412e...a55e2a24` |
 | Control | a byte-identical copy of A (same SHA-256 as A), used to measure how far two runs of the same binary differ |
 
